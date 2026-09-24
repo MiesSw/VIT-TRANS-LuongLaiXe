@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lương Lái Xe VIT TRANS</title>
+<!-- Mở sẵn kết nối tới Supabase càng sớm càng tốt (DNS + TLS handshake) —
+     app.js chỉ bắt đầu gọi fetch() sau khi tải xong, "làm nóng" trước ở đây
+     giúp lần gọi đầu tiên không phải chờ bắt tay kết nối từ đầu. -->
+<link rel="preconnect" href="https://vacyyyqgnqwuastjimlz.supabase.co">
+<link rel="dns-prefetch" href="https://vacyyyqgnqwuastjimlz.supabase.co">
+<!--
+  Bản tách file của hệ thống lương lái xe VIT TRANS. Cùng một mã nguồn với
+  bản Artifact trên claude.ai: app.js tự nhận biết nơi lưu dữ liệu —
+  mở qua claude.ai thì dùng dữ liệu chung của công ty, mở file này trực
+  tiếp thì lưu trong localStorage của trình duyệt máy đang mở (có sẵn dữ
+  liệu mẫu ở lần chạy đầu, xuất Excel/CSV tải file bình thường).
+  Dữ liệu bản offline chỉ nằm trên máy này, nhiều người không thấy chung.
+  Nhớ dùng nút "Tải file sao lưu" trong mục Hướng dẫn sau mỗi kỳ chốt lương.
+-->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<link rel="stylesheet" href="styles.css">
+<!-- defer: thư viện Excel khá nặng (~1MB) — chỉ dùng khi bấm Xuất/Nhập Excel
+     (không dùng ngay lúc tải trang), nên KHÔNG được để chặn tải trang/gọi
+     Supabase. defer tải song song với phần còn lại của trang, chạy đúng
+     trước app.js (giữ nguyên thứ tự) ngay trước khi trang "sẵn sàng". -->
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body>
+
+<!-- Thanh header ngang trên cùng — logo + tên công ty đầy đủ + phụ đề bên
+     trái, trạng thái lưu trữ bên phải. Tham khảo bố cục từ app "Quản lý vận
+     đơn" khác của công ty (logo+tên ở header, sidebar bên dưới chỉ điều
+     hướng). -->
+<header id="topbar">
+  <div class="topbar-brand">
+    <img class="topbar-logo" src="logo.png" alt="VIT TRANS">
+    <div class="topbar-titles">
+      <div class="topbar-company">CÔNG TY CỔ PHẦN DỊCH VỤ VÀ VẬN TẢI VIT TRANS</div>
+      <div class="topbar-app">Hệ thống lương lái xe</div>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <span class="topbar-status" id="topbar-status"><span class="storagedot" id="storage-dot"></span><span id="storage-mode">Đang kết nối dữ liệu…</span></span>
+  </div>
+</header>
+
+<div id="app">
+  <nav id="sidebar">
+    <div class="sidebar-brand">VIT TRANS</div>
+    <div class="periodbox">
+      <label for="side-period">Kỳ lương đang xem</label>
+      <div class="periodrow">
+        <button class="periodstep" id="side-prev" title="Kỳ trước" aria-label="Kỳ lương trước">‹</button>
+        <div class="period-picker">
+          <div class="period-display" id="side-period-display"></div>
+          <input type="month" id="side-period" class="period-native-input" aria-label="Chọn kỳ lương">
+        </div>
+        <button class="periodstep" id="side-next" title="Kỳ sau" aria-label="Kỳ lương sau">›</button>
+      </div>
+      <div class="periodcap" id="side-period-cap"></div>
+    </div>
+    <div id="navroot"></div>
+  </nav>
+  <button id="sidebar-toggle" title="Ẩn/hiện thanh bên" aria-label="Ẩn/hiện thanh bên">‹</button>
+  <main id="main"></main>
+</div>
+
+<div id="overlay" hidden><div class="modal" id="modalbox"></div></div>
+<div id="toast" hidden></div>
+
+<script defer src="app.js"></script>
+</body>
+</html>

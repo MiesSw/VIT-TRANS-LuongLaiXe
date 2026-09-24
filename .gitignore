@@ -1,0 +1,7 @@
+# File sao lưu dữ liệu tải từ app (chứa dữ liệu lương thật)
+*backup*.json
+
+# File hệ thống
+Thumbs.db
+desktop.ini
+.DS_Store

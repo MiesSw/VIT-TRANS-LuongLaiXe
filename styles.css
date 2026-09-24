@@ -1,0 +1,514 @@
+:root{
+  --bg:#F5F7FB;
+  --surface:#FFFFFF;
+  --surface-2:#EDF1F7;
+  --border:#E3E8F0;
+  --border-soft:#ECEFF4;
+  --ink:#1E2A3B;
+  --ink-muted:#55607A;
+  --accent:#205295;
+  --accent-strong:#163A6B;
+  --accent-soft:#EAF1FB;
+  --warn:#A65600;
+  --warn-soft:#FEF3E0;
+  /* Nền vàng rất nhạt cho cả dòng bị cảnh báo: icon cảnh báo ở cột đầu mới là
+     tín hiệu chính, nền chỉ cần đủ để mắt khoanh vùng — đậm bằng --warn-soft
+     thì cả bảng vàng rực, mất luôn tác dụng phân biệt. */
+  --warn-faint:#FFFAF3;
+  --danger:#C81A11;
+  --danger-soft:#FDECEC;
+  --good:#4A7007;
+  --good-soft:#EEF6E3;
+  --blue:#1B5FA8;
+  --blue-soft:#DCEAFB;
+  --pink:#B23A63;
+  --pink-soft:#FBE0EA;
+  --yellow:#705700;
+  --yellow-soft:#FBF0C7;
+  --shadow: 0 1px 2px rgba(30,42,59,0.06), 0 6px 20px -8px rgba(30,42,59,0.18);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#12151D;
+    --surface:#1A2029;
+    --surface-2:#212836;
+    --border:#2E3646;
+    --border-soft:#252C3A;
+    --ink:#E7EAF0;
+    --ink-muted:#98A2B3;
+    --accent:#5B93D6;
+    --accent-strong:#8CB8E8;
+    --accent-soft:#1B2C42;
+    --warn:#F0B45A;
+    --warn-soft:#3A2A12;
+    --warn-faint:#282420;
+    --danger:#F08A82;
+    --danger-soft:#3B1D1A;
+    --good:#9BC168;
+    --good-soft:#253711;
+    --blue:#7BB3EC;
+    --blue-soft:#1B2E44;
+    --pink:#F090B0;
+    --pink-soft:#3D2230;
+    --yellow:#E8D66B;
+    --yellow-soft:#3A331A;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 10px 30px -10px rgba(0,0,0,0.5);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#12151D;
+  --surface:#1A2029;
+  --surface-2:#212836;
+  --border:#2E3646;
+  --border-soft:#252C3A;
+  --ink:#E7EAF0;
+  --ink-muted:#98A2B3;
+  --accent:#5B93D6;
+  --accent-strong:#8CB8E8;
+  --accent-soft:#1B2C42;
+  --warn:#F0B45A;
+  --warn-soft:#3A2A12;
+  --warn-faint:#282420;
+  --danger:#F08A82;
+  --danger-soft:#3B1D1A;
+  --good:#9BC168;
+  --good-soft:#253711;
+  --blue:#7BB3EC;
+  --blue-soft:#1B2E44;
+  --pink:#F090B0;
+  --pink-soft:#3D2230;
+  --yellow:#E8D66B;
+  --yellow-soft:#3A331A;
+  --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 10px 30px -10px rgba(0,0,0,0.5);
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  background:var(--bg);
+  color:var(--ink);
+  font-family:"Inter", system-ui, sans-serif;
+  font-size:14px;
+  line-height:1.5;
+}
+h1,h2,h3,h4,.navgroup-title{font-family:"Plus Jakarta Sans","Inter",sans-serif;}
+.num, table td.num, input[type=number]{
+  font-family:"Inter", system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+button{font-family:inherit;cursor:pointer;}
+::selection{background:var(--accent-soft);}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+
+:root{ --sidebar-w:262px; --sidebar-collapsed-w:60px; --topbar-h:68px;
+  --collapse-ease:cubic-bezier(0.65,0,0.35,1); --collapse-dur:.32s; }
+#app{display:flex;min-height:calc(100vh - var(--topbar-h));}
+
+/* ---------- Header ngang trên cùng ---------- */
+/* logo + tên công ty đầy đủ + phụ đề bên trái, trạng thái lưu trữ bên phải —
+   tham khảo bố cục từ app "Quản lý vận đơn" khác của công ty. */
+#topbar{
+  position:sticky;top:0;z-index:90;height:var(--topbar-h);
+  display:flex;align-items:center;justify-content:space-between;gap:16px;
+  background:var(--surface);border-bottom:1px solid var(--border);
+  padding:0 22px;box-shadow:var(--shadow);
+}
+.topbar-brand{display:flex;align-items:center;gap:12px;min-width:0;}
+.topbar-logo{height:38px;width:auto;object-fit:contain;flex:none;}
+.topbar-titles{min-width:0;}
+.topbar-company{font-weight:800;font-size:15px;letter-spacing:0.01em;color:var(--ink);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.topbar-app{font-size:12px;color:var(--ink-muted);margin-top:1px;}
+.topbar-right{display:flex;align-items:center;gap:10px;flex:none;}
+.topbar-status{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--ink-muted);
+  background:var(--surface-2);border:1px solid var(--border-soft);border-radius:999px;padding:6px 12px;white-space:nowrap;}
+
+/* ---------- Sidebar ---------- */
+#sidebar{
+  width:var(--sidebar-w);flex:none;background:var(--surface);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;padding:18px 14px;gap:14px;
+  position:sticky;top:var(--topbar-h);height:calc(100vh - var(--topbar-h));overflow-y:auto;overflow-x:hidden;
+  transition:width var(--collapse-dur) var(--collapse-ease),padding var(--collapse-dur) var(--collapse-ease);
+}
+.sidebar-brand{font-weight:800;font-size:13px;letter-spacing:0.03em;color:var(--accent-strong);padding:2px 8px;}
+/* Thu gọn CHỪA LẠI 1 dải hẹp (không ẩn hết về 0 như trước) — chỉ còn icon
+   từng mục, tên đầy đủ xem qua tooltip khi rê chuột. Không cần lặp lại logo
+   ở đây vì header phía trên luôn hiện sẵn, mọi lúc. */
+#app.sidebar-collapsed #sidebar{width:var(--sidebar-collapsed-w);padding:18px 6px;align-items:center;}
+
+/* Nút ẩn/hiện thanh bên — nằm giữa chiều cao sidebar, ngay ranh giới sidebar/main */
+#sidebar-toggle{
+  position:fixed;top:calc(50vh + var(--topbar-h)/2);left:var(--sidebar-w);transform:translate(-50%,-50%);
+  width:22px;height:46px;padding:0;z-index:70;
+  display:flex;align-items:center;justify-content:center;
+  border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--ink-muted);
+  box-shadow:var(--shadow);font-size:13px;line-height:1;cursor:pointer;
+  transition:left var(--collapse-dur) var(--collapse-ease),color .15s ease,border-color .15s ease;
+}
+#sidebar-toggle:hover{color:var(--accent-strong);border-color:var(--accent);}
+#app.sidebar-collapsed #sidebar-toggle{left:var(--sidebar-collapsed-w);}
+/* .sidebar-brand/.periodbox/.navgroup-title dùng visibility:hidden (ẩn nội
+   dung nhưng VẪN giữ nguyên chiều cao đã chiếm chỗ) — để mỗi mục menu đứng
+   đúng cùng 1 hàng dọc dù thu gọn hay mở rộng, không bị dồn lên trên khi
+   thu gọn. Ép width bằng đúng bề ngang lúc mở rộng (dải thu gọn hẹp hơn
+   nhiều nên nếu để tự co theo bề ngang mới, chữ xuống dòng khác đi sẽ làm
+   lệch chiều cao) — phần thừa bị #sidebar cắt bởi overflow-x:hidden, không
+   sao vì đằng nào cũng đang vô hình. Khác với .navitem span dùng
+   display:none vì span không quyết định chiều cao dòng — ẩn hẳn để icon
+   canh giữa nút, không chừa chỗ trống. */
+.sidebar-brand,.periodbox,.navgroup-title{transition:opacity var(--collapse-dur) var(--collapse-ease);}
+#app.sidebar-collapsed .sidebar-brand,
+#app.sidebar-collapsed .periodbox,#app.sidebar-collapsed .navgroup-title{
+  visibility:hidden;opacity:0;width:calc(var(--sidebar-w) - 28px);flex:none;}
+/* .navitem span vẫn tắt/bật tức thời (display:none) chứ không fade mờ dần
+   như trên — vì icon cần canh giữa nút ngay khi chữ biến mất (xem
+   justify-content:center ở .navitem thu gọn bên dưới), fade mờ dần sẽ để
+   chữ chiếm chỗ thêm 1 lúc làm icon lệch tâm giữa chừng lúc chuyển động. */
+#app.sidebar-collapsed .navitem span{display:none;}
+/* #sidebar có align-items:center (căn giữa DẢI hẹp) nên #navroot cần
+   width:100% tường minh để không bị co lại theo nội dung — mọi .navgroup/
+   .navlist/.navitem bên trong giữ nguyên mặc định "full-width" (bỏ hẳn
+   align-items:center ở các tầng con) để mọi mục menu rộng bằng nhau, icon
+   canh giữa đều — trước đây mỗi tầng tự co-giãn-rồi-căn-giữa riêng khiến
+   nhóm chỉ có 1 mục (Tổng hợp, Hướng dẫn) lệch với nhóm nhiều mục.	*/
+#app.sidebar-collapsed #navroot{width:100%;}
+#app.sidebar-collapsed .navlist{margin-left:0;padding-left:0;border-left:none;}
+/* Ép height CỐ ĐỊNH bằng đúng chiều cao lúc mở rộng (đo thực tế = 30px) —
+   giữ nguyên padding dọc vẫn không đủ vì chỉ còn icon (không còn chữ) khiến
+   chiều cao tự nhiên theo nội dung bị lệch ~2px, cộng dồn qua từng dòng
+   khiến dòng dưới lệch dần so với lúc mở rộng. */
+#app.sidebar-collapsed .navitem{justify-content:center;padding:7px 0;gap:0;height:30px;}
+#app.sidebar-collapsed .navitem.active::before{left:-6px;}
+.nav-icon{width:16px;text-align:center;flex:none;font-size:14px;color:var(--ink-muted);}
+.navitem:hover .nav-icon,.navitem.active .nav-icon{color:inherit;}
+
+/* kỳ lương dùng chung cho mọi màn hình */
+.periodbox{background:var(--accent-soft);border:1px solid var(--border-soft);border-radius:10px;padding:9px 10px 10px;}
+.periodbox > label{display:block;font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--accent-strong);margin-bottom:6px;}
+.periodrow{display:flex;align-items:center;gap:4px;}
+/* input[type=month] gốc hiện chữ theo font/ngôn ngữ mặc định của trình
+   duyệt (VD "August 2026", không theo font Inter của app, không đổi được
+   sang tiếng Việt) — đặt .period-display đè lên trên, hiện đúng chữ tiếng
+   Việt ("Tháng 8 năm 2026") theo đúng font app; input gốc vẫn nằm dưới,
+   trong suốt (opacity:0) nhưng vẫn bắt được click để mở lịch chọn tháng
+   thật của trình duyệt — không mất tính năng chọn nhanh, chỉ đổi phần hiện chữ. */
+.period-picker{position:relative;flex:1;min-width:0;}
+.period-display{
+  border:1px solid var(--border);background:var(--surface);color:var(--ink);
+  border-radius:7px;padding:6px 7px;font-size:13px;font-family:inherit;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.period-native-input{
+  position:absolute;inset:0;width:100%;height:100%;
+  opacity:0;border:none;padding:0;margin:0;cursor:pointer;
+}
+.periodstep{border:1px solid var(--border);background:var(--surface);color:var(--ink);border-radius:7px;width:32px;height:36px;font-size:15px;line-height:1;display:flex;align-items:center;justify-content:center;padding:0;}
+.periodstep:hover{border-color:var(--accent);color:var(--accent-strong);}
+.periodcap{font-size:11.5px;color:var(--accent-strong);margin-top:6px;font-variant-numeric:tabular-nums;}
+
+/* điều hướng dạng cây: nhóm cha có gạch ngang, mục con thụt vào sau đường nối dọc */
+#navroot{display:flex;flex-direction:column;}
+.navgroup{display:flex;flex-direction:column;}
+.navgroup-title{
+  display:flex;align-items:center;gap:8px;padding:14px 8px 7px;
+  font-size:10px;font-weight:800;letter-spacing:0.11em;text-transform:uppercase;color:var(--ink-muted);
+}
+.navgroup-title::after{content:"";flex:1;height:1px;background:var(--border);}
+.navlist{display:flex;flex-direction:column;gap:1px;margin-left:14px;padding-left:11px;border-left:1px solid var(--border);}
+.navgroup.plain{margin-top:12px;padding-top:10px;border-top:1px solid var(--border);}
+.navgroup.plain .navlist{margin-left:0;padding-left:0;border-left:none;}
+.navitem{
+  position:relative;display:flex;align-items:center;gap:8px;width:100%;
+  padding:7px 10px;border:none;border-radius:7px;background:transparent;color:var(--ink);
+  text-align:left;font-size:13.5px;font-weight:500;
+}
+.navitem:hover{background:var(--surface-2);}
+.navitem.active{background:var(--accent-soft);color:var(--accent-strong);font-weight:600;}
+.navitem.active::before{content:"";position:absolute;left:-12px;top:5px;bottom:5px;width:2px;border-radius:2px;background:var(--accent);}
+.navgroup.plain .navitem.active::before{display:none;}
+
+.storagedot{width:7px;height:7px;border-radius:50%;background:var(--good);flex:none;}
+.storagedot.local{background:var(--warn);}
+
+/* ---------- Main ---------- */
+/* max-width chặn #main phình quá rộng trên màn hình lớn; margin:auto để phần
+   còn dư đó chia đều 2 bên thay vì dồn hết nội dung về sát sidebar bên trái. */
+#main{flex:1;min-width:0;padding:26px 32px 60px;max-width:1440px;margin:0 auto;}
+.pagehead{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:18px;}
+.pagehead h1{font-size:21px;margin:0 0 4px;font-weight:700;}
+.pagehead p{margin:0;color:var(--ink-muted);font-size:13px;max-width:660px;}
+.actions{display:flex;gap:8px;flex-wrap:wrap;}
+
+.btn{
+  border:1px solid var(--border);background:var(--surface);color:var(--ink);border-radius:8px;
+  padding:8px 14px;font-size:13px;font-weight:600;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;
+}
+.btn:hover{border-color:var(--accent);color:var(--accent-strong);}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;}
+.btn.primary:hover{background:var(--accent-strong);border-color:var(--accent-strong);color:#fff;}
+.btn.ghost{border-color:transparent;background:transparent;}
+.btn.danger{color:var(--danger);}
+.btn.danger:hover{border-color:var(--danger);}
+.btn.sm{padding:7px 10px;font-size:12px;border-radius:6px;}
+.btn:disabled{opacity:0.45;cursor:not-allowed;}
+.btn:disabled:hover{border-color:var(--border);color:var(--ink);}
+
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px 18px;margin-bottom:16px;}
+.panel h3{margin:0 0 10px;font-size:14px;}
+.panel h3.spaced{margin-top:22px;}
+.panel ul{margin:6px 0 0;padding-left:20px;}
+.panel li{margin-bottom:5px;}
+
+/* filter bar */
+.filterbar{display:flex;flex-wrap:wrap;gap:10px;align-items:end;background:var(--surface);border:1px solid var(--border);
+  border-radius:12px;padding:12px 14px;margin-bottom:16px;}
+.field{display:flex;flex-direction:column;gap:4px;}
+.field label{font-size:11px;font-weight:600;color:var(--ink-muted);text-transform:uppercase;letter-spacing:0.04em;}
+.field input, .field select{
+  border:1px solid var(--border);background:var(--bg);color:var(--ink);border-radius:7px;padding:7px 9px;font-size:13px;min-width:130px;
+}
+.field.grow input{min-width:210px;}
+.periodtag{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-muted);padding-bottom:8px;}
+.periodtag b{color:var(--ink);font-weight:600;}
+.spacer{flex:1;}
+
+/* table */
+/* max-height + overflow-y:auto BẮT BUỘC phải có để "thead th{position:sticky}"
+   dưới đây thật sự đứng yên khi cuộn — overflow-x:auto một mình vẫn khiến
+   trình duyệt tự suy ra overflow-y:auto cho khối này (không thể chỉ cuộn
+   ngang mà trục dọc "visible" thật sự), nghĩa là .tablewrap NGHIỄM NHIÊN trở
+   thành khung tham chiếu sticky của thead — nhưng nếu khối đó không có chiều
+   cao giới hạn (cao tự do theo nội dung) thì nó không bao giờ tự cuộn được,
+   khiến sticky vô tác dụng, thead cứ thế trôi mất khỏi màn hình khi cuộn
+   trang. Các bảng "Soát & sửa lỗi trước khi nhập" đã tự đặt max-height/overflow
+   riêng qua inline style nên vốn không bị lỗi này — giờ đặt mặc định ở đây để
+   MỌI bảng danh sách khác (Chuyến đi, Lái xe, Xe, Khách hàng, Tuyến, Phụ cấp,
+   Khấu trừ, Nhiên liệu...) cũng tự cuộn riêng + freeze header giống vậy. */
+.tablewrap{overflow:auto;max-height:70vh;border:1px solid var(--border);border-radius:12px;background:var(--surface);}
+table{border-collapse:collapse;width:100%;font-size:13px;min-width:640px;}
+/* Bảng chỉ 2 cột "Dự án / Đơn giá" trong modal (VD Sửa loại phụ cấp) — nội
+   dung ít, không cần sàn 640px như bảng danh sách nhiều cột, để sàn đó buộc
+   modal hẹp 580px phải lăn ngang mới xem hết dù chỉ có 2 cột đơn giản. */
+table.compact-table{min-width:0;}
+thead th{
+  position:sticky;top:0;background:#163A6B;text-align:left;padding:9px 12px;font-size:11px;
+  text-transform:uppercase;letter-spacing:0.04em;color:#fff;font-weight:700;border-bottom:1px solid #163A6B;white-space:nowrap;
+  border-right:1px solid rgba(255,255,255,0.2);
+}
+thead th:last-child{border-right:none;}
+/* Ô tiêu đề chứa nút (VD "thu gọn tất cả" ở Bảng lương): bớt padding dọc để
+   nút 28px không đội cao cả hàng tiêu đề so với các bảng khác. */
+thead th.th-tools{padding:2px 10px;}
+tbody td{padding:9px 12px;border-bottom:1px solid var(--border);border-right:1px solid var(--border);vertical-align:top;}
+tbody tr:last-child td{border-bottom:none;}
+tbody td:last-child{border-right:none;}
+tbody tr:hover{background:var(--surface-2);}
+td.num, th.num{text-align:right;}
+td.strong{font-weight:700;}
+/* Ép 1 dòng cho các cột dễ xuống dòng oan (VD Họ tên ở Bảng lương lái xe)
+   khi cột hẹp lại vì nhiều cột số tiền khác chiếm chỗ — tràn thêm chữ thay
+   vì bọc xuống dòng thứ 2 làm hàng cao thấp lệch nhau. */
+td.nowrap, th.nowrap{white-space:nowrap;}
+.row-warn{background:var(--warn-faint) !important;}
+.row-muted td{opacity:0.62;}
+.muted{color:var(--ink-muted);}
+.empty{text-align:center;padding:22px;color:var(--ink-muted);}
+tfoot .total-row td{font-weight:700;border-top:2px solid var(--border);background:var(--surface-2);}
+
+.badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;letter-spacing:0.02em;}
+/* Biển số + tải trọng xe cạnh nhau ở cột "Biển kiểm soát" (Bảng lương) — badge
+   tải trọng dùng chung .badge.neutral, không thêm màu mới. */
+.platecell{display:inline-flex;align-items:center;gap:6px;}
+.badge.outline{background:transparent;color:var(--accent-strong);border:1px solid var(--accent);}
+.badge.warn{background:var(--warn-soft);color:var(--warn);}
+.badge.danger{background:var(--danger-soft);color:var(--danger);}
+.badge.good{background:var(--good-soft);color:var(--good);}
+.badge.neutral{background:var(--surface-2);color:var(--ink-muted);}
+.badge.blue{background:var(--blue-soft);color:var(--blue);}
+.badge.pink{background:var(--pink-soft);color:var(--pink);}
+.badge.yellow{background:var(--yellow-soft);color:var(--yellow);}
+
+.warnbox{border:1px solid var(--warn);background:var(--warn-soft);color:var(--warn);border-radius:10px;padding:10px 14px;margin-bottom:16px;font-size:13px;}
+.warnbox ul{margin:6px 0 0;padding-left:18px;}
+.warnbox .hint{color:var(--warn);}
+
+.expand-row td{background:var(--bg);padding:14px 18px;}
+/* Khung mở rộng của Bảng lương — mỗi loại lương một dòng, bấm để sổ/thu
+   bảng chi tiết ngay bên dưới, thay vì xếp nhiều bảng cạnh nhau khó nhìn. */
+.subaccordion{border:1px solid var(--border);border-radius:10px;background:var(--surface);overflow:hidden;}
+.subrow{display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--border);}
+.subaccordion > :last-child{border-bottom:none;}
+.subrow[data-toggle]{cursor:pointer;}
+.subrow[data-toggle]:hover{background:var(--surface-2);}
+.subrow-toggle{background:none;border:none;color:var(--ink-muted);font-size:13px;padding:0;width:16px;flex:none;text-align:center;}
+/* Chiều rộng cố định (không flex:1 kéo giãn) để số tiền luôn nằm ngay sau
+   nhãn, không bị đẩy tít sang phải theo chiều rộng cuộn của bảng lớn. */
+.subrow-label{font-weight:600;flex:none;width:200px;}
+/* min-width (không phải width cố định): dòng "Lương cố định" khi có Lương
+   cứng hiện dạng "thực nhận / mức đặt đ" (VD "15.000.000 / 15.000.000 đ")
+   dài hơn hẳn số tiền 1 giá trị bình thường — width cố định 150px làm chữ
+   tràn ra ngoài khung, đè chồng lên chữ mô tả (.subrow-meta) ngay sau nó;
+   min-width vẫn giữ thẳng hàng cho số ngắn nhưng tự giãn khi số dài hơn. */
+.subrow-amount{font-variant-numeric:tabular-nums;font-weight:600;flex:none;min-width:150px;text-align:right;white-space:nowrap;}
+/* Đặt SAU số tiền (không còn kẹt giữa nhãn và số tiền trong 170px cố định)
+   — mô tả dài như "28/26 ngày công + 2 ngày chạy riêng NTF" hay bị bọc
+   xuống 2 dòng khi kẹt ở giữa; nằm cuối hàng, chiếm hết phần rộng còn thừa
+   (flex:1) nên vừa đủ 1 dòng, quá dài mới cắt bớt kèm "…". */
+.subrow-meta{font-size:12px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.subrow-amount.danger{color:var(--danger);}
+.subrow-detail{padding:2px 14px 12px 38px;border-bottom:1px solid var(--border);overflow-x:auto;}
+.subrow-detail table{font-size:12px;min-width:0;width:100%;}
+.linkbtn{background:none;border:none;color:var(--accent);font-weight:700;font-size:13px;padding:0 4px;}
+
+/* ---------- Nút icon tình trạng dữ liệu (cột đầu Bảng lương) ---------- */
+/* Thay nút tam giác ▸/▾: hình tam giác cảnh báo = còn thiếu dữ liệu, hình
+   tròn dấu tích = đã hoàn thiện. Vẫn bấm để sổ/thu chi tiết dòng đó. */
+.statusbtn{display:inline-flex;align-items:center;justify-content:center;
+  width:28px;height:28px;padding:0;border:1px solid transparent;border-radius:8px;
+  background:none;cursor:pointer;transition:background .12s ease,border-color .12s ease;}
+.statusbtn svg{width:18px;height:18px;display:block;}
+.statusbtn.lack{color:var(--warn);}
+.statusbtn.done{color:var(--good);}
+.statusbtn:hover{border-color:currentColor;}
+.statusbtn.lack:hover{background:var(--warn-soft);}
+.statusbtn.done:hover{background:var(--good-soft);}
+/* Dòng đang mở: nền đặc + viền để thấy ngay dòng nào đang sổ chi tiết —
+   trước đây vai trò này do mũi tên ▾ đảm nhiệm. */
+.statusbtn[aria-expanded="true"]{border-color:currentColor;}
+.statusbtn.lack[aria-expanded="true"]{background:var(--warn-soft);}
+.statusbtn.done[aria-expanded="true"]{background:var(--good-soft);}
+.statusbtn:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+
+/* Nút "thu gọn tất cả" ở ô tiêu đề cột đầu — cùng kích thước với .statusbtn
+   bên dưới để cả cột thẳng hàng. Hàng tiêu đề nền xanh đậm nên nút lấy màu
+   trắng ngả mờ (không dùng --ink-muted: chữ xám trên nền xanh đậm sẽ chìm). */
+.collapsebtn{display:inline-flex;align-items:center;justify-content:center;
+  width:28px;height:28px;padding:0;border:1px solid transparent;border-radius:8px;
+  background:none;color:rgba(255,255,255,0.78);cursor:pointer;
+  transition:background .12s ease,border-color .12s ease,color .12s ease;}
+.collapsebtn svg{width:16px;height:16px;display:block;}
+.collapsebtn:hover:not(:disabled){background:rgba(255,255,255,0.16);border-color:rgba(255,255,255,0.4);color:#fff;}
+.collapsebtn:disabled{opacity:0.35;cursor:default;}
+.collapsebtn:focus-visible{outline:2px solid #fff;outline-offset:1px;}
+
+/* ---------- Ô chọn có gõ tìm kiếm (lái xe, xe, khách hàng, tuyến…) ---------- */
+.combo{position:relative;min-width:0;}
+.combo-input{width:100%;border:1px solid var(--border);background:var(--bg);color:var(--ink);
+  border-radius:7px;padding:8px 10px;font-size:13px;text-overflow:ellipsis;}
+.combo-input:focus{border-color:var(--accent);}
+.combo-list{position:absolute;z-index:80;left:0;right:0;top:calc(100% + 4px);max-height:230px;overflow-y:auto;
+  background:var(--surface);border:1px solid var(--border);border-radius:9px;box-shadow:var(--shadow);padding:4px;}
+.combo-item{padding:7px 9px;font-size:13px;border-radius:6px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.combo-item:hover,.combo-item.active{background:var(--accent-soft);color:var(--accent-strong);}
+.combo-empty{padding:8px 9px;font-size:12.5px;color:var(--ink-muted);}
+.field .combo-input{min-width:150px;}
+
+.qty-input{width:92px;text-align:right;border:1px solid var(--border);border-radius:6px;padding:5px 7px;background:var(--bg);color:var(--ink);font-size:13px;}
+.qty-input.dirty{border-color:var(--warn);background:var(--warn-soft);}
+/* Cột "mốc tải trọng" của bảng bậc thang km (modal Khách hàng) — canh giữa
+   ô nhập số tấn + nhãn "tấn" + nút xoá thành một khối, không để lệch trái. */
+.km-tier-head{display:flex;flex-direction:column;align-items:center;gap:4px;}
+.km-tier-head .qty-input{width:64px;text-align:center;}
+.km-tier-foot{display:flex;align-items:center;gap:4px;font-size:11px;white-space:nowrap;}
+/* Giữ chuột ~1s trên ô "Khoảng km"/mốc tải trọng của bảng bậc thang km để
+   kéo đổi vị trí dòng/cột (xem setupKmGridDragReorder trong app.js). */
+body.km-dragging{cursor:grabbing;}
+body.km-dragging *{cursor:grabbing !important;user-select:none;}
+.km-drag-row,.km-drag-col{opacity:.45;}
+.km-drop-target{outline:2px dashed var(--accent);outline-offset:-2px;background:var(--accent-soft);}
+/* Icon lỗi ở cột "Kiểm tra" của bảng soát lỗi nhập Excel — nổi bật, đưa
+   chuột qua xem tooltip nội dung lỗi thay vì in cả câu dài. */
+.import-err-icon{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;
+  border-radius:999px;background:var(--danger-soft);color:var(--danger);font-size:14px;font-weight:700;
+  cursor:help;}
+/* Tooltip của icon lỗi trên — 1 div dùng chung, "position:fixed" theo toạ độ
+   chuột (đặt bằng JS ở setupImportTooltip trong app.js) để không bị bảng
+   che/cắt mất (bảng cuộn ngang "overflow:auto" sẽ cắt tooltip nếu định vị
+   kiểu absolute bên trong nó). Độ rộng cố định + tự xuống dòng thay vì dồn
+   hết câu lỗi dài trên 1 dòng. */
+.import-tip{position:fixed;width:220px;white-space:normal;word-wrap:break-word;text-align:left;
+  background:var(--ink);color:var(--bg);padding:8px 10px;border-radius:8px;
+  font-size:12px;font-weight:400;line-height:1.45;box-shadow:var(--shadow);
+  z-index:9999;pointer-events:none;}
+/* Tô hồng đúng Ô cần bổ sung/sửa/bỏ bớt trong bảng soát lỗi nhập Excel —
+   không chỉ tô cả dòng, để nhìn ra ngay ô nào cần chỉnh. */
+.import-cell-bad{background:var(--pink-soft) !important;border-color:var(--pink) !important;}
+/* ô gõ chữ trong bảng (vd tên tuyến) — rộng hết ô, chữ căn trái */
+.qty-input.text{width:100%;min-width:180px;text-align:left;font-family:inherit;}
+/* Ẩn nút tăng/giảm mặc định của trình duyệt trên input number — chỉ gõ số, không cần bấm mũi tên. */
+input[type=number]::-webkit-outer-spin-button,
+input[type=number]::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0; }
+input[type=number]{ -moz-appearance:textfield; appearance:textfield; }
+.savebar{display:flex;align-items:center;gap:12px;margin-top:14px;}
+.savebar .status{font-size:12px;color:var(--ink-muted);}
+.savebar .status.dirty{color:var(--warn);font-weight:600;}
+
+/* modal */
+#overlay{position:fixed;inset:0;background:rgba(20,22,17,0.45);display:flex;align-items:flex-start;justify-content:center;padding:5vh 16px;z-index:50;overflow-y:auto;}
+.modal{position:relative;background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow);width:100%;max-width:580px;padding:22px 24px;transition:max-width .15s ease;}
+/* Modal rộng hơn — dùng cho khách hàng "Theo km" và "Sửa loại phụ cấp" (đơn
+   vị "mỗi chuyến theo km × tải trọng") để bảng bậc thang km × tải trọng xe
+   hiện đủ cột thay vì bị bó hẹp/phải lăn ngang. Tự co giãn theo đúng bề rộng
+   bảng (width:fit-content) thay vì luôn chiếm 1 khổ cố định — ít cột thì
+   modal hẹp lại, nhiều cột thì modal tự giãn ra tới khi chạm mốc trần. */
+.modal.modal-wide{width:fit-content;max-width:96vw;}
+.modal.modal-wide .km-fit-table{width:auto;}
+/* Nút đóng "×" — nằm NGAY TRONG khung modal, cố định ở góc trên-phải theo
+   .modal (position:relative ở trên) chứ không bám/nổi theo khi cuộn nội
+   dung (không "freeze" — cuộn modal dài thì nút cuộn theo bình thường như
+   mọi phần tử khác trong khung, không tách riêng ở lại một chỗ). */
+.modal-close-wrap{position:absolute;top:14px;right:14px;z-index:5;}
+.modal-close-x{
+  width:36px;height:36px;border-radius:10px;
+  border:none;background:var(--danger);color:#fff;
+  font-size:22px;line-height:1;cursor:pointer;box-shadow:var(--shadow);
+  display:flex;align-items:center;justify-content:center;padding:0;
+}
+.modal-close-x:hover{background:#9E1409;}
+/* Chừa chỗ bên phải cho nút × khỏi đè lên chữ tiêu đề modal dài. */
+.modal h3{padding-right:44px;}
+.modal h3{margin:0 0 14px;font-size:16px;}
+.modal-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.modal-grid .full{grid-column:1/-1;}
+/* Ô lưới mặc định không co nhỏ hơn nội dung: select tên khách hàng dài sẽ
+   kéo giãn cột và đẩy cột bên cạnh ra ngoài khung modal — min-width:0 cho phép co lại. */
+.modal-grid > *{min-width:0;}
+.modal-field{display:flex;flex-direction:column;gap:4px;min-width:0;}
+.modal-field label{font-size:12px;font-weight:600;color:var(--ink-muted);}
+.modal-field input, .modal-field select{
+  border:1px solid var(--border);background:var(--bg);color:var(--ink);border-radius:7px;padding:8px 10px;font-size:13px;
+  width:100%;max-width:100%;text-overflow:ellipsis;
+}
+.modal-field input:disabled{opacity:0.7;cursor:not-allowed;}
+.modal-field.checkrow{flex-direction:row;align-items:center;gap:8px;}
+.modal-field.checkrow input{width:16px;height:16px;flex:none;}
+.modal-error{background:var(--danger-soft);color:var(--danger);border-radius:8px;padding:8px 10px;font-size:12.5px;font-weight:600;}
+.modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px;flex-wrap:wrap;}
+.hint{font-size:11.5px;color:var(--ink-muted);margin-top:2px;}
+.hint b{color:var(--ink);}
+.hint .warn{color:var(--warn);}
+
+/* toast */
+#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:60;
+  background:var(--ink);color:var(--bg);border-radius:9px;padding:10px 16px;font-size:13px;font-weight:600;box-shadow:var(--shadow);max-width:90vw;}
+#toast.danger{background:var(--danger);color:#fff;}
+
+@media (max-width:880px){
+  #topbar{padding:0 14px;gap:8px;}
+  .topbar-logo{height:30px;}
+  .topbar-company{font-size:13px;}
+  .topbar-app{display:none;}
+  .topbar-status span:not(.storagedot){display:none;}
+  #app{flex-direction:column;}
+  #sidebar{width:100%;height:auto;position:static;overflow:visible;padding:14px 16px;}
+  #app.sidebar-collapsed #sidebar{width:100%;padding:14px 16px;}
+  #navroot{display:flex;flex-wrap:wrap;gap:0 20px;}
+  .navgroup{flex:1 1 230px;}
+  #main{padding:18px 16px 40px;}
+  .modal-grid{grid-template-columns:1fr;}
+  #sidebar-toggle{display:none;}
+}
+[hidden]{display:none!important;}
+
+@media (prefers-reduced-motion: reduce){
+  *{transition-duration:0.01ms!important;animation-duration:0.01ms!important;}
+}

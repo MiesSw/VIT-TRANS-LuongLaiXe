@@ -1,0 +1,142 @@
+<skills project="VIT-TRANS-LuongLaiXe">
+
+  <project_overview>
+    <description>
+      Web app tính lương lái xe VIT TRANS. Thuần HTML/CSS/JS, không build
+      tool, không framework, không package.json. Mở trực tiếp index.html là
+      chạy được. 3 file cốt lõi: index.html (khung trang), styles.css (giao
+      diện, theme sáng/tối theo hệ điều hành), app.js (toàn bộ logic, 1 file
+      duy nhất).
+    </description>
+    <data_model>
+      Toàn bộ trạng thái nằm trong 1 object "state" toàn cục, gồm các mảng:
+      drivers, vehicles, routes, customers, allowanceTypes, allowanceConfigs,
+      allowanceUsage, trips, deductions, fuelLogs, fuelPrices. Lớp "db" trừu
+      tượng hoá nơi lưu (claude.ai db thật hoặc makeLocalDb() giả lập cùng
+      API bằng localStorage) — phần còn lại của app không cần biết đang chạy
+      chế độ nào. Vẽ lại UI qua scheduleRender() (dùng requestAnimationFrame)
+      rồi render() — không dùng framework, không virtual DOM.
+    </data_model>
+  </project_overview>
+
+  <coding_conventions>
+    <rule>Bình luận (comment) viết bằng tiếng Việt, chỉ giải thích LÝ DO
+      (ràng buộc ẩn, workaround, bất biến khó thấy) — không giải thích CÁI GÌ
+      vì tên biến/hàm đã đủ rõ. Mặc định KHÔNG viết comment trừ khi thật sự
+      cần.</rule>
+    <rule>Không thêm tính năng/refactor/trừu tượng hoá ngoài phạm vi được
+      yêu cầu. Sửa lỗi không kèm dọn dẹp không liên quan; không thiết kế cho
+      nhu cầu tương lai chưa có.</rule>
+    <rule>expandedRows: 1 Set toàn cục DÙNG CHUNG cho MỌI trạng thái ẩn/hiện
+      dòng trên mọi trang — được clear() mỗi khi setSection() chuyển trang
+      (không đụng độ khoá giữa các trang). Dùng khoá ghép kiểu
+      `${id}|${phần}` cho các accordion nhiều cấp.</rule>
+    <rule>Khoá định danh chính (mã khách hàng, mã lái xe, biển số xe, tên
+      tuyến) mặc định "disabled" khi sửa bản ghi đã tồn tại (khoá cứng) —
+      TRỪ KHI đã xây cơ chế đổi tên có cascade (xem route rename ở
+      saveRouteTable, và đổi biển số xe ở openVehicleModal): validate biển số
+      mới không trùng, hỏi confirm() nếu có bản ghi tham chiếu, rồi cascade
+      update tất cả bản ghi liên quan (vd trips.plate, fuelLogs.plate) trước
+      khi lưu bản ghi gốc.</rule>
+    <rule>Màu badge dùng lại các class có sẵn: .badge.blue/.pink/.yellow/
+      .good/.neutral/.outline/.warn/.danger — mỗi màu ánh xạ 1 CSS var
+      (--blue, --pink, --warn, --danger…) đã có sẵn ở cả theme sáng/tối,
+      KHÔNG tự chế màu mới trừ khi được yêu cầu rõ.</rule>
+    <rule>CSS biến theme qua custom properties (--bg, --surface, --ink,
+      --accent, --danger, --pink…) khai báo ở :root + override trong
+      @media(prefers-color-scheme:dark) và :root[data-theme="dark"]. Thêm
+      màu mới phải khai báo đủ cả 3 khối để không vỡ theme.</rule>
+    <rule>Trước khi sửa 1 hàm, LUÔN Read đoạn code liên quan trước — không
+      đoán chữ ký hàm/cấu trúc dữ liệu từ tên biến.</rule>
+    <rule>Khi 2 nơi trong code lặp lại cùng 1 điều kiện/công thức nghiệp vụ
+      (vd ngưỡng km, sắp xếp ngày), tách ra 1 hàm dùng chung thay vì copy —
+      tránh lệch quy tắc khi sửa 1 nơi mà quên nơi kia.</rule>
+  </coding_conventions>
+
+  <testing_methodology>
+    <principle>MỌI thay đổi UI/logic đều phải test bằng Chrome headless
+      trước khi báo "đã xong" — không suy luận suông là chắc chắn đúng.</principle>
+
+    <headless_chrome_setup>
+      <binary>"/c/Program Files/Google/Chrome/Application/chrome.exe"</binary>
+      <flags>--headless=new --disable-gpu --no-sandbox
+        --virtual-time-budget=&lt;ms&gt; --window-size=&lt;W&gt;,&lt;H&gt;
+        và (--dump-dom | --screenshot=&lt;absolute_path&gt;)</flags>
+      <critical_note>
+        --screenshot PHẢI dùng đường dẫn TUYỆT ĐỐI — đường dẫn tương đối có
+        thể báo lỗi "Access is denied" tuỳ thư mục làm việc hiện tại của
+        lệnh bash.
+      </critical_note>
+      <critical_note>
+        Polyfill bắt buộc trước khi load app.js:
+        `window.requestAnimationFrame = function(cb){ return setTimeout(cb, 0); };`
+        vì scheduleRender() dùng rAF — thiếu polyfill này thì UI không bao
+        giờ vẽ lại trong môi trường headless.
+      </critical_note>
+      <critical_note>
+        File HTML test PHẢI có đủ khung sườn giống index.html thật: sidebar
+        với các phần tử #side-period, #side-period-cap, #storage-dot,
+        #storage-mode, #navroot, #overlay/#modalbox, #toast, #main — thiếu
+        bất kỳ phần tử nào app.js truy cập trực tiếp bằng getElementById sẽ
+        gây lỗi TDZ/null-reference làm gãy toàn bộ script ngay từ đầu.
+      </critical_note>
+      <critical_note>
+        Đợi qua thời gian CSS transition (vd 300ms) TRƯỚC khi đọc
+        getComputedStyle sau khi toggle 1 class có transition — đọc ngay lập
+        tức có thể trả về giá trị TRƯỚC khi transition bắt đầu (kết quả sai,
+        không phải bug thật).
+      </critical_note>
+      <critical_note>
+        document.styleSheets / .cssRules KHÔNG đọc được stylesheet ngoài nếu
+        file test (file://...) và styles.css nằm ở 2 đường dẫn file:// khác
+        nhau (Chrome coi mỗi đường dẫn file:// là 1 origin riêng, chặn truy
+        cập cross-origin). Muốn kiểm tra CSS đã áp dụng đúng chưa thì dùng
+        getComputedStyle(el) hoặc chụp ảnh màn hình, không dùng cssRules.
+      </critical_note>
+      <critical_note>
+        Test tương tác kéo-thả/hover cần giả lập ĐÚNG toạ độ thật trên màn
+        hình (scrollIntoView trước khi lấy getBoundingClientRect) — nếu phần
+        tử chưa cuộn vào vùng nhìn thấy, toạ độ đọc được có thể nằm ngoài
+        viewport, khiến test cho kết quả sai dù code không có lỗi.
+      </critical_note>
+    </headless_chrome_setup>
+
+    <workflow>
+      <step>Viết 1 file .html test riêng trong thư mục scratchpad (không
+        phải index.html thật), load app.js/styles.css qua đường dẫn file://
+        tuyệt đối tới file thật trong project.</step>
+      <step>Trong test, gọi thẳng các hàm/thao tác cần kiểm (vd
+        openTripModal(), importTripsExcel(), click() phần tử, dispatchEvent
+        mousedown/mousemove/mouseup...) rồi log kết quả ra 1 <div id="test-result"> để đọc qua --dump-dom.</step>
+      <step>Luôn kèm 1 vòng regression cuối: setSection() qua đủ tất cả các
+        mục điều hướng chính (payroll, trips, allowanceUsage, fuel,
+        deductions, cfg-drivers, cfg-vehicles, cfg-customers, cfg-routes,
+        cfg-allowance, guide) và bắt lỗi từng mục — đảm bảo thay đổi không
+        làm vỡ trang khác.</step>
+      <step>Khi cần xác nhận trực quan (giao diện, tooltip, kéo-thả), dùng
+        --screenshot rồi Read ảnh ra xem trực tiếp — không chỉ tin vào log
+        text.</step>
+      <step>XONG THÌ DỌN: xoá hết file .html test, dump.html, ảnh chụp, log
+        lỗi tạm trong thư mục scratchpad — không để rác lại.</step>
+    </workflow>
+  </testing_methodology>
+
+  <working_principles>
+    <rule>Đọc kỹ code hiện có trước khi sửa; không đoán mò cấu trúc.</rule>
+    <rule>Khi yêu cầu của người dùng có thể hiểu theo nhiều cách khác nhau
+      và đoán sai sẽ tốn công sửa lại nhiều, DỪNG LẠI hỏi rõ (câu hỏi trắc
+      nghiệm ngắn, có preview/ví dụ cụ thể nếu là lựa chọn thiết kế) thay vì
+      tự quyết rồi làm sai hướng.</rule>
+    <rule>Với câu hỏi mang tính trao đổi/xin ý kiến ("có cách nào không?",
+      "nên làm sao?"), trả lời ngắn gọn kèm đề xuất + đánh đổi chính, KHÔNG
+      tự động code luôn — chờ người dùng đồng ý hướng đi.</rule>
+    <rule>Sau khi sửa xong 1 tính năng, tự rà lại các đoạn liên quan xem có
+      logic trùng lặp/lệch nhau không (đặc biệt sau nhiều lần chỉnh liên
+      tiếp cùng 1 khu vực code) — không cần đợi người dùng nhắc.</rule>
+    <rule>Không tự thêm thư viện/CDN mới nếu không cần thiết; nếu cần icon
+      hoặc font, ưu tiên CDN ổn định (cdnjs) và ghim đúng version.</rule>
+    <rule>Trả lời người dùng bằng tiếng Việt, ngắn gọn, nêu rõ ĐÃ TEST NHƯ
+      THẾ NÀO trước khi báo hoàn thành.</rule>
+  </working_principles>
+
+</skills>
