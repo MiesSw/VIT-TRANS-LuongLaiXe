@@ -1,0 +1,56 @@
+name: Build & Release
+
+# Mỗi khi có commit được đẩy (push) lên nhánh main, GitHub tự chạy file này
+# trên một máy ảo Windows miễn phí: đóng gói server.py thành file
+# VIT-TRANS-LuongLaiXe.exe, gom cùng các file giao diện (index.html, app.js,
+# styles.css...) thành 2 gói zip, rồi đăng lên mục "Releases" của repo.
+# Có thể bấm "Run workflow" trong tab Actions để chạy lại bằng tay bất cứ lúc nào.
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Lấy code
+        uses: actions/checkout@v4
+
+      - name: Cài Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cài công cụ đóng gói (PyInstaller)
+        run: pip install pyinstaller
+
+      - name: Ghi số phiên bản cho lần phát hành này
+        run: Set-Content -Path version.txt -Value "v$env:GITHUB_RUN_NUMBER" -NoNewline -Encoding utf8
+
+      - name: Đóng gói server.py thành 1 file .exe
+        run: pyinstaller --onefile --noconsole --name VIT-TRANS-LuongLaiXe --icon app_icon.ico server.py
+
+      - name: Gom các file nội dung dùng để cập nhật (app-content.zip)
+        run: |
+          New-Item -ItemType Directory -Force -Path content | Out-Null
+          Copy-Item index.html,app.js,styles.css,logo.png,app_icon.ico,update-check.js,version.txt content/
+          Compress-Archive -Path content\* -DestinationPath app-content.zip -Force
+
+      - name: Gom gói đầy đủ cho người tải lần đầu (kèm file .exe)
+        run: |
+          New-Item -ItemType Directory -Force -Path full | Out-Null
+          Copy-Item content\* full/ -Recurse
+          Copy-Item dist\VIT-TRANS-LuongLaiXe.exe full/
+          Compress-Archive -Path full\* -DestinationPath VIT-TRANS-LuongLaiXe-full.zip -Force
+
+      - name: Đăng bản phát hành lên GitHub (mục Releases)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v$env:GITHUB_RUN_NUMBER" app-content.zip VIT-TRANS-LuongLaiXe-full.zip `
+            --title "v$env:GITHUB_RUN_NUMBER" `
+            --notes "Tự động đóng gói từ commit $env:GITHUB_SHA"

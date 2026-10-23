@@ -148,33 +148,57 @@ RLS trong Supabase (dựa vào `profiles.role`), không cần đổi gì bên ap
 có dữ liệu, đang dùng `x-app-secret` cũ): chạy `auth_migration.sql` thay vì
 chạy lại `supabase_setup.sql` (sẽ báo lỗi trùng bảng).
 
-## Mở app qua server cục bộ + tự cập nhật bản mới từ GitHub
+## Mã nguồn mở + tự cập nhật bản mới từ GitHub
 
-Ngoài cách mở thẳng `index.html`, có thể bấm đúp **`Mo_ung_dung.bat`** để mở
-app qua 1 server nhỏ chạy ngay trên máy (`server.py`, chỉ dùng thư viện có
-sẵn của Python, không cần cài gì thêm — máy cần có sẵn Python). Cách này mở
-ra đúng app y hệt, chỉ khác là có thêm:
+Repo GitHub của app này (`MiesSw/VIT-TRANS-LuongLaiXe.`) đang để **Public**
+(công khai) — ai cũng xem/tải được, đúng tinh thần "mã nguồn mở". Nhờ vậy
+người dùng cuối có thể tải app về dùng **mà không cần cài Python hay Git gì
+cả**, và được tự động báo khi có bản mới.
 
-- Tự kiểm tra GitHub mỗi khi mở app và mỗi 10 phút — nếu có commit mới trên
-  nhánh đang dùng, hiện 1 thanh báo ở đầu trang.
-- Nút **"Cập nhật ngay"** trên thanh báo: tải bản mới nhất về và tự tải lại
-  trang, không cần tắt mở gì thêm.
+### Người dùng cuối (tải về dùng lần đầu)
 
-**Điều kiện để dùng được:** thư mục này phải là 1 git repo đã có `git remote`
-trỏ tới 1 repo GitHub, và repo đó đã từng được `push` ít nhất 1 lần. Thư mục
-hiện tại đã là git repo (`.git` có sẵn) — nếu `git fetch`/`update-check` báo
-lỗi, kiểm tra lại `git remote -v` (đường dẫn remote có thể gõ sai) và GitHub
-đã có repo đó chưa, repo public hay private (private thì máy cần đã đăng
-nhập GitHub qua Git — ví dụ đã đăng nhập trong VS Code).
+1. Vào tab **Releases** của repo trên GitHub (cột bên phải trang repo, hoặc
+   `github.com/MiesSw/VIT-TRANS-LuongLaiXe./releases`).
+2. Ở bản mới nhất, tải file **`VIT-TRANS-LuongLaiXe-full.zip`**.
+3. Giải nén ra 1 thư mục bất kỳ, bấm đúp file **`VIT-TRANS-LuongLaiXe.exe`**
+   bên trong để mở app. Không cần cài thêm gì.
 
-**Để các máy khác cũng tải code này về dùng được** (ý nghĩa "mã nguồn mở"):
-đẩy (`push`) code lên GitHub 1 lần từ máy này (qua VS Code: mục Source
-Control → Commit → Push, hoặc GitHub Desktop) — máy khác chỉ cần
-`git clone` repo đó là có y hệt, kể cả `Mo_ung_dung.bat`.
+Lần đầu mở, Windows có thể hiện cảnh báo "Windows protected your PC" (vì
+file .exe chưa có chữ ký số trả phí) — bấm **More info → Run anyway** là mở
+được bình thường, chỉ hỏi 1 lần.
 
-**server.py làm gì khi bấm "Cập nhật ngay":** chạy `git fetch` rồi
-`git reset --hard origin/<nhánh>` — lấy đúng bản mới nhất trên GitHub, bỏ
-qua mọi sửa tay chưa `commit` trong `index.html`/`app.js`/`styles.css` ở máy
-đang chạy. Dữ liệu lương (ngày công, chuyến, lương...) không nằm trong các
-file này nên không bị ảnh hưởng — nó nằm ở `localStorage` trình duyệt hoặc
-Supabase tuỳ chế độ đang chạy.
+### Cách app tự báo/cập nhật
+
+Mỗi khi mở app (và mỗi 10 phút trong lúc đang mở), app tự hỏi GitHub xem có
+bản phát hành mới hơn không. Nếu có, hiện 1 **thanh báo** ở đầu trang kèm
+nút **"Cập nhật ngay"** — bấm vào đó, app tự tải đúng bản mới nhất về, thay
+vào các file `index.html`/`app.js`/`styles.css`... trong thư mục đang chạy,
+rồi tự tải lại trang. Không cần tải lại từ đầu, không cần Git.
+
+Dữ liệu lương (ngày công, chuyến, lương...) không nằm trong các file này nên
+**không bị ảnh hưởng** khi cập nhật — nó nằm ở `localStorage` trình duyệt
+hoặc Supabase tuỳ chế độ đang chạy.
+
+### Phía người duy trì code (đẩy bản mới lên)
+
+Chỉ cần sửa `index.html`/`app.js`/`styles.css`..., rồi `commit` + `push` lên
+nhánh `main` như bình thường (qua VS Code: Source Control → Commit → Sync
+Changes). Không cần tự đóng gói .exe hay tự đăng Release — một quy trình tự
+động trên GitHub (`.github/workflows/release.yml`, chạy bằng **GitHub
+Actions**, miễn phí) sẽ tự:
+
+1. Đóng gói `server.py` thành file `VIT-TRANS-LuongLaiXe.exe`.
+2. Gom các file giao diện lại thành `app-content.zip` (dùng cho bản cập
+   nhật) và `VIT-TRANS-LuongLaiXe-full.zip` (dùng cho người tải lần đầu).
+3. Đăng cả 2 lên mục **Releases** của repo, đánh số phiên bản tự tăng dần
+   (`v1`, `v2`, `v3`...).
+
+Xem tiến trình đóng gói ở tab **Actions** trên trang GitHub của repo — mỗi
+lần push sẽ có 1 lượt chạy mới, mất khoảng 1–2 phút.
+
+### Chạy từ code gốc để tự kiểm tra trước khi đẩy lên (tuỳ chọn, dành cho
+### người sửa code)
+
+Có thể bấm đúp `Mo_ung_dung.bat` để mở app qua `server.py` ngay trên máy
+đang sửa code (máy đó cần có sẵn Python) — dùng để tự xem thử trước khi
+`commit`/`push`, không bắt buộc với người dùng cuối.
