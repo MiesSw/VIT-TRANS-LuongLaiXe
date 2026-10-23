@@ -12,14 +12,12 @@
 -- trước hoặc báo tôi).
 --
 -- BẢO MẬT (đọc trước khi chạy): mọi bảng bên dưới đều bật Row Level
--- Security (RLS), chỉ cho phép đọc/ghi khi request kèm đúng header
--- "x-app-secret" — app.js đã tự gắn header này vào mọi request tới
--- Supabase. Đây là mức bảo vệ TẠM THỜI (không phải đăng nhập từng người
--- dùng thật) — ai có được cả 3 thứ (URL Supabase, anon key, VÀ đúng giá
--- trị secret) thì vẫn đọc/sửa được hết dữ liệu. Đủ để tránh việc chỉ cần
--- lộ anon key (vốn nằm công khai trong mọi app Supabase) là đọc/sửa được
--- ngay — nhưng KHÔNG thay thế được hệ thống đăng nhập thật nếu sau này cần
--- phân quyền theo từng người dùng.
+-- Security (RLS), chỉ cho phép đọc/ghi khi request có phiên đăng nhập
+-- Supabase Auth hợp lệ (auth.uid() khác NULL) — app.js bắt đăng nhập
+-- email/mật khẩu trước khi gọi bất kỳ request nào. TẠM THỜI mọi tài khoản
+-- đã đăng nhập đều có toàn quyền đọc/ghi/xoá như nhau (chưa phân quyền chi
+-- tiết theo vai trò) — xem bảng "profiles" bên dưới để tạo tài khoản admin
+-- đầu tiên và mục "Đăng nhập & phân quyền người dùng" trong README.md.
 -- =============================================================================
 
 BEGIN;
@@ -39,6 +37,12 @@ CREATE TABLE customers (
   long_haul_up_to_5       NUMERIC(14,2),
   long_haul_up_to_8       NUMERIC(14,2),
   long_haul_up_to_15      NUMERIC(14,2),
+  -- Lương trực (khách Theo tuyến) — 3 cột riêng, không dùng chung với Phụ cấp đường dài
+  standby_up_to_5         NUMERIC(14,2),
+  standby_up_to_8         NUMERIC(14,2),
+  standby_up_to_15        NUMERIC(14,2),
+  -- Khách Theo km: cộng Phụ cấp đường dài cho mỗi ngày chạy trọn khách này
+  long_haul_full_day      BOOLEAN,
   km_regions              JSONB
 );
 
@@ -77,7 +81,7 @@ CREATE TABLE drivers (
 );
 
 -- -----------------------------------------------------------------------------
--- BẢNG GIÁ THEO TUYẾN
+-- LƯƠNG THEO TUYẾN
 -- -----------------------------------------------------------------------------
 CREATE TABLE routes (
   id               SERIAL        PRIMARY KEY,
@@ -180,16 +184,72 @@ CREATE TABLE fuel_prices (
   price  NUMERIC(10,2) NOT NULL
 );
 
+-- -----------------------------------------------------------------------------
+-- CHỐT KỲ — mỗi kỳ đã chốt 1 dòng; "rows" là bản chụp bảng lương lúc chốt.
+-- -----------------------------------------------------------------------------
+CREATE TABLE period_locks (
+  id         TEXT         PRIMARY KEY,
+  period     CHAR(7)      NOT NULL UNIQUE,
+  locked_at  TIMESTAMPTZ  NOT NULL DEFAULT now(),
+  locked_by  TEXT,
+  rows       JSONB        NOT NULL DEFAULT '[]'::jsonb
+);
+
+-- -----------------------------------------------------------------------------
+-- HỒ SƠ NGƯỜI DÙNG — 1-1 với auth.users (bảng có sẵn của Supabase Auth, chỉ
+-- đọc chứ không tự tạo/sửa cấu trúc được). role='admin' có toàn quyền quản
+-- lý tài khoản khác (xem/đổi quyền, khoá tài khoản) qua màn hình "Người
+-- dùng" trong app; role='user' là nhân viên thường. Tài khoản MỚI đăng nhập
+-- lần đầu (admin tạo qua Supabase Dashboard → Authentication → Add user) tự
+-- có 1 dòng ở đây với role='user' nhờ trigger bên dưới.
+-- -----------------------------------------------------------------------------
+CREATE TABLE profiles (
+  id         UUID         PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  email      TEXT         NOT NULL,
+  full_name  TEXT,
+  role       VARCHAR(20)  NOT NULL DEFAULT 'user' CHECK (role IN ('admin','user')),
+  is_active  BOOLEAN      NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+
+CREATE FUNCTION handle_new_user() RETURNS trigger AS $$
+BEGIN
+  INSERT INTO public.profiles (id, email) VALUES (new.id, new.email);
+  RETURN new;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION handle_new_user();
+
+-- SECURITY DEFINER để tự bỏ qua RLS của chính bảng "profiles" khi tra cứu
+-- bên trong hàm này — nếu không sẽ đệ quy vô hạn (policy của profiles lại
+-- gọi is_admin(), is_admin() lại đọc profiles bị chính policy đó chặn).
+CREATE FUNCTION is_admin() RETURNS boolean AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin' AND is_active
+  );
+$$ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public;
+
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+-- Ai đã đăng nhập cũng xem được danh sách người dùng (chỉ email/quyền, không
+-- nhạy cảm) nhưng CHỈ admin mới sửa được (đổi quyền/khoá tài khoản) — kể cả
+-- tự sửa hồ sơ chính mình cũng bị chặn nếu không phải admin.
+CREATE POLICY profiles_select ON profiles FOR SELECT
+  USING (auth.uid() IS NOT NULL);
+CREATE POLICY profiles_update_admin_only ON profiles FOR UPDATE
+  USING (is_admin()) WITH CHECK (is_admin());
+
 -- =============================================================================
--- ROW LEVEL SECURITY — chặn mọi truy cập trừ khi request kèm đúng header
--- "x-app-secret" (PostgREST đưa toàn bộ header của request vào GUC
--- "request.headers" dạng JSON, đọc được qua current_setting). Áp dụng đồng
--- loạt cho cả 11 bảng bằng 1 vòng lặp cho gọn.
+-- ROW LEVEL SECURITY (11 bảng nghiệp vụ) — chặn mọi truy cập trừ khi request
+-- có phiên đăng nhập Supabase Auth hợp lệ (auth.uid() khác NULL). TẠM THỜI
+-- mọi tài khoản đã đăng nhập đều có toàn quyền như nhau — sau này muốn phân
+-- quyền chi tiết hơn theo profiles.role thì chỉ cần sửa lại policy ở đây,
+-- KHÔNG cần đổi gì bên app.js. Áp dụng đồng loạt bằng 1 vòng lặp cho gọn.
 -- =============================================================================
 DO $$
-DECLARE
-  tbl text;
-  app_secret text := 'hJBS2VJVRGLHnY20_noLzOUUaOPso2BH';
+DECLARE tbl text;
 BEGIN
   FOREACH tbl IN ARRAY ARRAY['customers','drivers','vehicles','routes',
     'allowance_types','allowance_configs','allowance_usage','trips',
@@ -198,12 +258,26 @@ BEGIN
     EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY;', tbl);
     EXECUTE format('DROP POLICY IF EXISTS app_secret_access ON %I;', tbl);
     EXECUTE format(
-      'CREATE POLICY app_secret_access ON %I FOR ALL '
-      || 'USING (current_setting(''request.headers'', true)::json->>''x-app-secret'' = %L) '
-      || 'WITH CHECK (current_setting(''request.headers'', true)::json->>''x-app-secret'' = %L);',
-      tbl, app_secret, app_secret
+      'CREATE POLICY authenticated_full_access ON %I FOR ALL '
+      || 'USING (auth.uid() IS NOT NULL) WITH CHECK (auth.uid() IS NOT NULL);',
+      tbl
     );
   END LOOP;
 END $$;
 
+-- Chốt kỳ: ai đã đăng nhập cũng xem và chốt được, chỉ admin mới mở chốt (xoá).
+ALTER TABLE period_locks ENABLE ROW LEVEL SECURITY;
+CREATE POLICY period_locks_select ON period_locks FOR SELECT
+  USING (auth.uid() IS NOT NULL);
+CREATE POLICY period_locks_insert ON period_locks FOR INSERT
+  WITH CHECK (auth.uid() IS NOT NULL);
+CREATE POLICY period_locks_delete_admin ON period_locks FOR DELETE
+  USING (is_admin());
+
 COMMIT;
+
+-- Sau khi chạy xong file này: tạo tài khoản admin đầu tiên qua Supabase
+-- Dashboard → Authentication → Add user (nhớ tick "Auto Confirm User"), rồi
+-- chạy RIÊNG dòng dưới đây (sửa đúng email) để gán quyền admin cho tài
+-- khoản đó — trước đó không ai có quyền admin nên không ai tự gán được:
+-- UPDATE profiles SET role = 'admin' WHERE email = 'admin@vittrans.com';

@@ -13,10 +13,12 @@ Không cần server, không cần `npm install`.
   của công ty trên claude.ai (nhiều người xem cùng số liệu).
 - **Mở trực tiếp file, đã cấu hình Supabase** (`SUPABASE_URL`/
   `SUPABASE_ANON_KEY` trong app.js khác rỗng): dùng chung dữ liệu thật trên
-  Supabase (Postgres) — xem mục "Về schema.sql / supabase_setup.sql" dưới.
+  Supabase (Postgres), **bắt đăng nhập email/mật khẩu** trước khi vào app —
+  xem mục "Đăng nhập & phân quyền người dùng" dưới.
 - **Mở trực tiếp file, chưa cấu hình Supabase**: dữ liệu lưu trong
   `localStorage` của trình duyệt máy đang mở, có sẵn dữ liệu mẫu ở lần chạy
-  đầu để dùng thử ngay — chỉ máy đó thấy, không dùng chung được.
+  đầu để dùng thử ngay — chỉ máy đó thấy, không dùng chung được, không cần
+  đăng nhập.
 
 Chấm than nhỏ ở góc dưới thanh bên (chấm xanh/vàng) cho biết đang ở chế độ
 nào. Vào mục **Hướng dẫn** trong app để xem hướng dẫn sử dụng đầy đủ và các
@@ -29,12 +31,33 @@ index.html          Khung trang, chỉ load styles.css + app.js
 styles.css          Toàn bộ giao diện (theme sáng/tối tự theo hệ điều hành)
 app.js              Toàn bộ logic — 1 file duy nhất, không chia module
 schema.sql          Schema PostgreSQL + dữ liệu MẪU (tham khảo/test cục bộ)
-supabase_setup.sql  Schema PostgreSQL (không kèm dữ liệu mẫu) + RLS — chạy
-                    file này trong SQL Editor của Supabase cho database thật
+supabase_setup.sql  Schema PostgreSQL (không kèm dữ liệu mẫu) + RLS + đăng
+                    nhập — chạy file này trong SQL Editor của Supabase khi
+                    CÀI MỚI (database trống)
+auth_migration.sql  Chỉ phần đăng nhập (RLS + bảng "profiles") — chạy file
+                    này thay vì supabase_setup.sql khi NÂNG CẤP database
+                    Supabase đang chạy thật (đã có dữ liệu)
 ```
 
 Không có build tool, không có framework, không có `package.json` — thuần
 HTML/CSS/JS, chạy được ngay khi mở file.
+
+## Nâng cấp ngày 22/10/2026 (rà soát thao tác & câu chữ)
+
+**Database Supabase đang chạy thật: chạy `nang_cap_2026-10_chot_ky.sql`
+trong Supabase › SQL Editor TRƯỚC khi dùng app.js mới** (thêm 3 cột Lương
+trực riêng, cột "Phụ cấp đường dài theo ngày", bảng `period_locks` cho Chốt
+kỳ; chạy lại không lỗi, không mất dữ liệu). Chưa chạy thì lưu khách hàng và
+Chốt kỳ sẽ báo "Database chưa được nâng cấp". Cài mới từ đầu thì chỉ cần
+`supabase_setup.sql` (đã gộp sẵn).
+
+Thay đổi chính: Chốt kỳ / Mở chốt kỳ (admin) ở Bảng lương; ô chọn có gõ tìm
+không còn lưu nhầm giá trị cũ khi bấm Lưu ngay; nhập Excel chặn chuyến trùng,
+Loại chuyến gõ sai, thiếu Số km; cảnh báo theo đúng kỳ đang xem; Lương trực
+tách 3 ô riêng; Phụ cấp đường dài theo ngày thành tuỳ chọn của khách hàng (không
+gắn cứng NTF); mốc tải trọng thống nhất "đến X tấn"; nhiên liệu tự lấy đầu kỳ
+từ cuối kỳ trước; Hướng dẫn viết lại dạng gập/mở. Cách tính tiền các khoản
+khác giữ nguyên.
 
 ## Sao lưu dữ liệu
 
@@ -46,8 +69,8 @@ nên tải để giữ thêm 1 bản ngoài hệ thống.
 ## Tổng quan chức năng
 
 **Cấu hình** (làm một lần, sửa khi chính sách đổi): Khách hàng (mỗi khách
-hàng một cách tính lương chuyến — Theo tuyến / Theo km / Lương cứng cho lái
-xe / Theo chuyến + bốc xếp), Lái xe, Xe, Bảng giá theo tuyến, Phụ cấp (đơn
+hàng một cách tính lương chuyến — Theo tuyến / Theo km / Lương cứng /
+Theo chuyến + bốc xếp), Lái xe, Xe, Lương theo tuyến, Phụ cấp (đơn
 giá riêng theo từng dự án, nhiều kiểu tính khác nhau).
 
 **Vận hành** (hằng ngày): Lịch lái xe (nhập chuyến), Khấu trừ, Nhiên liệu
@@ -56,7 +79,8 @@ mẫu → điền → nhập lại).
 
 **Chốt lương**: Bảng lương theo kỳ — mỗi lái xe một dòng, bấm vào xem chi
 tiết từng khoản (Lương cố định / Lương chuyến + Tăng cường / Phụ cấp /
-Thưởng-phạt nhiên liệu / Khấu trừ), xuất Excel hoặc CSV.
+Thưởng-phạt nhiên liệu / Khấu trừ), Chốt kỳ (giữ nguyên số đã chốt, khoá sửa
+dữ liệu kỳ đó), xuất Excel hoặc CSV.
 
 Chi tiết đầy đủ và các quy tắc tính (công thức, mốc tải trọng, ngày công
 chuẩn…) xem trong mục **Hướng dẫn** của chính app — đó là nguồn tài liệu
@@ -67,7 +91,7 @@ chuẩn, README này chỉ tóm tắt để biết đường vào.
 Toàn bộ trạng thái nằm trong một object `state` toàn cục, gồm các mảng:
 `drivers`, `vehicles`, `routes`, `customers`, `allowanceTypes`,
 `allowanceConfigs`, `allowanceUsage`, `trips`, `deductions`, `fuelLogs`,
-`fuelPrices`. Lớp `db` trừu tượng hoá nơi lưu (claude.ai db thật,
+`fuelPrices`, `periodLocks`. Lớp `db` trừu tượng hoá nơi lưu (claude.ai db thật,
 `makeSupabaseDb()` nói chuyện với Postgres qua REST API của Supabase, hoặc
 `makeLocalDb()` giả lập cùng API bằng `localStorage`) nên phần còn lại của
 app không cần biết đang chạy ở chế độ nào. Vẽ lại giao diện qua
@@ -75,8 +99,8 @@ app không cần biết đang chạy ở chế độ nào. Vẽ lại giao diệ
 
 ## Về schema.sql / supabase_setup.sql
 
-Hai file SQL cùng định nghĩa 1 schema Postgres giống nhau (10 bảng, khớp
-1-1 với các collection trong `state`), khác mục đích:
+Các file SQL định nghĩa schema Postgres khớp 1-1 với các collection trong
+`state`, khác mục đích:
 - `schema.sql`: kèm dữ liệu MẪU (từ `SEED_DATA` trong app.js) — dùng để
   tham khảo cấu trúc hoặc test trên 1 Postgres cục bộ, KHÔNG dùng cho
   Supabase thật (sẽ lẫn dữ liệu giả vào dữ liệu công ty).
@@ -84,12 +108,73 @@ Hai file SQL cùng định nghĩa 1 schema Postgres giống nhau (10 bảng, kh�
   Security (RLS) cho cả 10 bảng — đây là file cần dán vào **Supabase
   Dashboard → SQL Editor → Run** để tạo database thật.
 
-App đã nối thẳng vào Supabase qua REST API (PostgREST) bằng 3 hằng số ở đầu
-`makeSupabaseDb()` trong app.js: `SUPABASE_URL`, `SUPABASE_ANON_KEY`,
-`SUPABASE_APP_SECRET` — không cần backend riêng. `SUPABASE_APP_SECRET` phải
-khớp đúng giá trị đã dùng khi chạy khối RLS trong `supabase_setup.sql`
-(gắn kèm mọi request qua header `x-app-secret`) — đây là lớp chặn tạm thời
-để không phải ai có `SUPABASE_ANON_KEY` (vốn công khai trong app.js) cũng
-đọc/sửa được dữ liệu, KHÔNG phải hệ thống đăng nhập theo từng người dùng
-thật. Đặt `SUPABASE_URL`/`SUPABASE_ANON_KEY` thành chuỗi rỗng để tắt hẳn,
-quay lại chạy offline bằng `localStorage`.
+App đã nối thẳng vào Supabase qua REST API (PostgREST) bằng 2 hằng số ở đầu
+`makeSupabaseDb()` trong app.js: `SUPABASE_URL`, `SUPABASE_ANON_KEY` — không
+cần backend riêng. Đặt cả 2 thành chuỗi rỗng để tắt hẳn, quay lại chạy
+offline bằng `localStorage`.
+
+## Đăng nhập & phân quyền người dùng
+
+Khi chạy qua Supabase thật, app bắt đăng nhập email/mật khẩu (Supabase Auth)
+trước khi cho vào — không còn dùng chung 1 "mật khẩu app" cho mọi người như
+bản cũ (`x-app-secret`). Mỗi người 1 tài khoản riêng, Row Level Security
+(RLS) trên Postgres chỉ cho phép đọc/ghi khi có phiên đăng nhập hợp lệ
+(`auth.uid()` khác NULL) — xem `auth_migration.sql`/`supabase_setup.sql`.
+
+**Tạo tài khoản mới** (chỉ admin làm, KHÔNG có nút "Đăng ký" trong app — tạo
+tài khoản cần khoá bí mật của Supabase, không thể làm an toàn từ trình
+duyệt): Supabase Dashboard → **Authentication → Add user**, nhập email +
+mật khẩu, nhớ tick **Auto Confirm User**. Tài khoản đó đăng nhập lần đầu là
+dùng được ngay, tự xuất hiện trong màn hình **Người dùng** của app (mục Cấu
+hình, chỉ admin thấy) với quyền "Nhân viên".
+
+**Tạo tài khoản admin đầu tiên**: sau khi tạo tài khoản như trên, vào SQL
+Editor chạy:
+```sql
+UPDATE profiles SET role = 'admin' WHERE email = 'admin@vittrans.com';
+```
+(trước bước này chưa ai có quyền admin nên không ai tự gán được qua app).
+Từ tài khoản admin đó, vào màn hình **Người dùng** để đổi quyền/khoá các
+tài khoản khác — không cần đụng SQL nữa cho các lần sau.
+
+**Tạm thời**: mọi tài khoản đã đăng nhập (dù quyền "Nhân viên" hay "Admin")
+đều có toàn quyền đọc/ghi/xoá dữ liệu như nhau — riêng màn hình **Người
+dùng** (đổi quyền, khoá tài khoản) thì chỉ admin vào được/sửa được. Muốn
+phân quyền chi tiết hơn theo từng màn hình sau này thì sửa lại các policy
+RLS trong Supabase (dựa vào `profiles.role`), không cần đổi gì bên app.js.
+
+**Cài đặt lần đầu vào database trống**: `supabase_setup.sql` đã gộp sẵn phần
+đăng nhập này, chạy 1 file là đủ. **Nâng cấp database đang chạy thật** (đã
+có dữ liệu, đang dùng `x-app-secret` cũ): chạy `auth_migration.sql` thay vì
+chạy lại `supabase_setup.sql` (sẽ báo lỗi trùng bảng).
+
+## Mở app qua server cục bộ + tự cập nhật bản mới từ GitHub
+
+Ngoài cách mở thẳng `index.html`, có thể bấm đúp **`Mo_ung_dung.bat`** để mở
+app qua 1 server nhỏ chạy ngay trên máy (`server.py`, chỉ dùng thư viện có
+sẵn của Python, không cần cài gì thêm — máy cần có sẵn Python). Cách này mở
+ra đúng app y hệt, chỉ khác là có thêm:
+
+- Tự kiểm tra GitHub mỗi khi mở app và mỗi 10 phút — nếu có commit mới trên
+  nhánh đang dùng, hiện 1 thanh báo ở đầu trang.
+- Nút **"Cập nhật ngay"** trên thanh báo: tải bản mới nhất về và tự tải lại
+  trang, không cần tắt mở gì thêm.
+
+**Điều kiện để dùng được:** thư mục này phải là 1 git repo đã có `git remote`
+trỏ tới 1 repo GitHub, và repo đó đã từng được `push` ít nhất 1 lần. Thư mục
+hiện tại đã là git repo (`.git` có sẵn) — nếu `git fetch`/`update-check` báo
+lỗi, kiểm tra lại `git remote -v` (đường dẫn remote có thể gõ sai) và GitHub
+đã có repo đó chưa, repo public hay private (private thì máy cần đã đăng
+nhập GitHub qua Git — ví dụ đã đăng nhập trong VS Code).
+
+**Để các máy khác cũng tải code này về dùng được** (ý nghĩa "mã nguồn mở"):
+đẩy (`push`) code lên GitHub 1 lần từ máy này (qua VS Code: mục Source
+Control → Commit → Push, hoặc GitHub Desktop) — máy khác chỉ cần
+`git clone` repo đó là có y hệt, kể cả `Mo_ung_dung.bat`.
+
+**server.py làm gì khi bấm "Cập nhật ngay":** chạy `git fetch` rồi
+`git reset --hard origin/<nhánh>` — lấy đúng bản mới nhất trên GitHub, bỏ
+qua mọi sửa tay chưa `commit` trong `index.html`/`app.js`/`styles.css` ở máy
+đang chạy. Dữ liệu lương (ngày công, chuyến, lương...) không nằm trong các
+file này nên không bị ảnh hưởng — nó nằm ở `localStorage` trình duyệt hoặc
+Supabase tuỳ chế độ đang chạy.

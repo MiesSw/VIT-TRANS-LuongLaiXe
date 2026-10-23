@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lương Lái Xe VIT TRANS</title>
+<!--
+  GIAO DIỆN MỚI (bản thử) — dựng theo mẫu "Clean SaaS dashboard":
+  logo trong sidebar, thanh trên cùng có tìm kiếm / kỳ lương / nút thao tác
+  của trang / chuông / người dùng, menu phẳng icon nét mảnh, mỗi trang là 1 card danh sách có
+  bộ lọc ở đầu card + phân trang ở cuối, cột thao tác gom vào nút "⋯".
+
+  Dùng CHUNG app.js (toàn bộ logic + dữ liệu) với index.html — chỉ khác
+  phần nhìn: styles.css (nền) + styles-moi.css (giao diện mới) + app-moi.js
+  (dựng lại khung). Mở index.html để về giao diện cũ.
+-->
+<link rel="preconnect" href="https://vacyyyqgnqwuastjimlz.supabase.co">
+<link rel="dns-prefetch" href="https://vacyyyqgnqwuastjimlz.supabase.co">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="styles-moi.css">
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body class="ui2">
+
+<!-- Màn hình đăng nhập (giữ nguyên id cho app.js) -->
+<div id="authOverlay" class="auth-overlay" hidden>
+  <form id="authForm" class="auth-card">
+    <img class="auth-logo" src="logo.png" alt="VIT TRANS">
+    <h1>Đăng nhập</h1>
+    <p class="auth-sub">Hệ thống lương lái xe VIT TRANS</p>
+    <p class="auth-error" id="authError" hidden></p>
+    <div class="auth-field">
+      <label for="authEmail">Email</label>
+      <input type="email" id="authEmail" name="email" autocomplete="username" required>
+    </div>
+    <div class="auth-field">
+      <label for="authPassword">Mật khẩu</label>
+      <input type="password" id="authPassword" name="password" autocomplete="current-password" required>
+    </div>
+    <button type="submit" class="btn primary auth-submit" id="authSubmit">Đăng nhập</button>
+    <p class="auth-hint">Chưa có tài khoản? Liên hệ admin để được tạo tài khoản.</p>
+  </form>
+</div>
+
+<div id="app">
+  <!-- ================= SIDEBAR ================= -->
+  <nav id="sidebar">
+    <div class="sb-head">
+      <a class="sb-brand" href="#" data-nav="payroll" title="Bảng lương">
+        <img class="sb-logo" src="logo.png" alt="VIT TRANS">
+        <span class="sb-brand-text"><b>Lương lái xe</b><small>VIT TRANS</small></span>
+      </a>
+      <button type="button" class="sb-collapse" id="sb-collapse" title="Thu gọn thanh bên" aria-label="Thu gọn thanh bên"></button>
+    </div>
+    <div class="sb-label">Menu</div>
+    <div id="navroot"></div>
+    <div class="sb-card" id="sb-card"></div>
+  </nav>
+  <!-- Nút cũ của app.js — giữ lại cho đúng id, giao diện mới dùng #sb-collapse -->
+  <button id="sidebar-toggle" hidden aria-hidden="true">‹</button>
+  <div class="sb-backdrop" id="sb-backdrop"></div>
+
+  <!-- ================= CỘT PHẢI ================= -->
+  <div class="ui2-right">
+    <header id="topbar">
+      <button type="button" class="tb-icon-btn tb-menu" id="tb-menu" aria-label="Mở menu"></button>
+      <label class="tb-search">
+        <span class="tb-search-icon" aria-hidden="true"></span>
+        <input type="search" id="tb-search" placeholder="Tìm kiếm…" autocomplete="off">
+      </label>
+
+      <!-- Kỳ lương (giữ nguyên id các phần tử cho app.js) -->
+      <div class="periodbox">
+        <label for="side-period-display">Kỳ lương</label>
+        <div class="periodrow">
+          <button class="periodstep" id="side-prev" title="Kỳ trước" aria-label="Kỳ lương trước">‹</button>
+          <div class="period-picker" id="period-picker">
+            <button type="button" class="period-display" id="side-period-display" aria-haspopup="true" aria-expanded="false"></button>
+            <div class="period-popup" id="period-popup" hidden>
+              <label class="period-popup-all"><input type="checkbox" id="side-period-all"> Tất cả các kỳ</label>
+              <input type="month" id="side-period" class="period-popup-input" aria-label="Chọn kỳ lương">
+            </div>
+          </div>
+          <button class="periodstep" id="side-next" title="Kỳ sau" aria-label="Kỳ lương sau">›</button>
+        </div>
+        <div class="periodcap" id="side-period-cap"></div>
+      </div>
+
+      <!-- Nút thao tác của trang đang xem (Tải mẫu Excel, Nhập từ Excel, Thêm…)
+           — app-moi.js chuyển từ đầu trang lên đây sau mỗi lần vẽ trang -->
+      <div class="tb-actions" id="tb-actions"></div>
+
+      <div class="tb-right">
+        <span class="topbar-status" id="topbar-status"><span class="storagedot" id="storage-dot"></span><span id="storage-mode">Đang kết nối dữ liệu…</span></span>
+        <button type="button" class="tb-icon-btn tb-bell" id="tb-bell" title="Cảnh báo dữ liệu kỳ này" aria-label="Cảnh báo dữ liệu"><span class="tb-bell-dot" id="tb-bell-dot" hidden></span></button>
+        <span class="tb-sep" aria-hidden="true"></span>
+        <div class="tb-user">
+          <span class="tb-avatar" id="tb-avatar">VT</span>
+          <span class="tb-user-text"><b id="tb-name">VIT TRANS</b><small id="topbar-user" hidden></small><small id="tb-sub">Hệ thống lương lái xe</small></span>
+          <button type="button" class="tb-icon-btn" id="btn-logout" title="Đăng xuất" aria-label="Đăng xuất" hidden></button>
+        </div>
+      </div>
+    </header>
+    <main id="main"></main>
+  </div>
+</div>
+
+<div id="overlay" hidden><div class="modal" id="modalbox"></div></div>
+<div id="toast" hidden></div>
+
+<script defer src="app.js"></script>
+<script defer src="app-moi.js"></script>
+</body>
+</html>
