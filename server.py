@@ -20,8 +20,8 @@ import urllib.request
 
 PORT = 5678
 
-# Tên kho trên GitHub (chú ý có dấu chấm ở cuối tên repo — đúng với repo thật).
-REPO = 'MiesSw/VIT-TRANS-LuongLaiXe.'
+# Tên kho trên GitHub.
+REPO = 'MiesSw/VIT-TRANS-LuongLaiXe'
 API_LATEST_RELEASE = 'https://api.github.com/repos/%s/releases/latest' % REPO
 UPDATE_ASSET_NAME = 'app-content.zip'
 

@@ -150,7 +150,7 @@ chạy lại `supabase_setup.sql` (sẽ báo lỗi trùng bảng).
 
 ## Mã nguồn mở + tự cập nhật bản mới từ GitHub
 
-Repo GitHub của app này (`MiesSw/VIT-TRANS-LuongLaiXe.`) đang để **Public**
+Repo GitHub của app này (`MiesSw/VIT-TRANS-LuongLaiXe`) đang để **Public**
 (công khai) — ai cũng xem/tải được, đúng tinh thần "mã nguồn mở". Nhờ vậy
 người dùng cuối có thể tải app về dùng **mà không cần cài Python hay Git gì
 cả**, và được tự động báo khi có bản mới.
@@ -158,7 +158,7 @@ cả**, và được tự động báo khi có bản mới.
 ### Người dùng cuối (tải về dùng lần đầu)
 
 1. Vào tab **Releases** của repo trên GitHub (cột bên phải trang repo, hoặc
-   `github.com/MiesSw/VIT-TRANS-LuongLaiXe./releases`).
+   `github.com/MiesSw/VIT-TRANS-LuongLaiXe/releases`).
 2. Ở bản mới nhất, tải file **`VIT-TRANS-LuongLaiXe-full.zip`**.
 3. Giải nén ra 1 thư mục bất kỳ, bấm đúp file **`VIT-TRANS-LuongLaiXe.exe`**
    bên trong để mở app. Không cần cài thêm gì.
