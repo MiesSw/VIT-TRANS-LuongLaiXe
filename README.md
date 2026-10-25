@@ -59,6 +59,30 @@ gắn cứng NTF); mốc tải trọng thống nhất "đến X tấn"; nhiên l
 từ cuối kỳ trước; Hướng dẫn viết lại dạng gập/mở. Cách tính tiền các khoản
 khác giữ nguyên.
 
+## Nâng cấp ngày 23/10/2026 (đổi tên "Theo chuyến + bốc xếp" → "Theo chuyến")
+
+Cách tính lương chuyến trước đây tên "Theo chuyến + bốc xếp" (khách SGW,
+BHX) đổi tên thành **"Theo chuyến"** — vẫn là 1 lựa chọn RIÊNG, khác "Theo
+tuyến" (2 khách hàng gọi khác nhau), nhưng cách tính giống nhau (tra đúng
+bảng "Lương theo tuyến"). Khác biệt duy nhất: bỏ hẳn đơn giá bốc xếp riêng
+trên hồ sơ khách hàng và ô "Số lượt bốc xếp" trên từng chuyến — bốc xếp
+(nếu khách hàng có) giờ tính qua Cấu hình › Phụ cấp (loại "Bốc xếp" mẫu có
+sẵn, unit "Theo chuyến") như mọi phụ cấp khác, không cộng thẳng vào Lương
+chuyến nữa.
+
+**Database Supabase đang chạy thật: chạy `nang_cap_2026-10-23_gop_bocxep.sql`
+trong Supabase › SQL Editor** — xoá đơn giá bốc xếp cũ trên hồ sơ khách
+hàng và số lượt bốc xếp cũ trên các chuyến (không còn dùng tới); KHÔNG đổi
+cách tính của khách hàng nào (SGW/BHX vẫn giữ nguyên là "Theo chuyến",
+không chuyển sang "Theo tuyến cố định").
+
+⚠️ **Trước khi chạy file đó**, nếu muốn giữ nguyên tổng lương của các kỳ
+**chưa chốt**: vào Cấu hình › Phụ cấp, đặt đơn giá bốc xếp cho SGW/BHX
+(thay cho đơn giá bốc xếp cũ trên hồ sơ khách hàng) — vì sau khi chạy file
+nâng cấp, các chuyến cũ có ghi "Số lượt bốc xếp" sẽ không còn tự cộng
+khoản này vào Lương chuyến. Các kỳ **đã chốt** không bị ảnh hưởng (Bảng
+lương đọc đúng bản đã lưu lúc chốt, không tính lại).
+
 ## Sao lưu dữ liệu
 
 Vào **Hướng dẫn** → **Sao lưu dữ liệu** → **Tải file sao lưu (.json)** sau
@@ -69,8 +93,8 @@ nên tải để giữ thêm 1 bản ngoài hệ thống.
 ## Tổng quan chức năng
 
 **Cấu hình** (làm một lần, sửa khi chính sách đổi): Khách hàng (mỗi khách
-hàng một cách tính lương chuyến — Theo tuyến / Theo km / Lương cứng /
-Theo chuyến + bốc xếp), Lái xe, Xe, Lương theo tuyến, Phụ cấp (đơn
+hàng một cách tính lương chuyến — Theo tuyến cố định / Theo chuyến / Theo
+km / Lương cứng), Lái xe, Xe, Lương theo tuyến, Phụ cấp (đơn
 giá riêng theo từng dự án, nhiều kiểu tính khác nhau).
 
 **Vận hành** (hằng ngày): Lịch lái xe (nhập chuyến), Khấu trừ, Nhiên liệu

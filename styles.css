@@ -743,17 +743,6 @@ body.ui2{background:var(--page);color:var(--ink);font-family:"Inter",system-ui,-
 .ui2 .navitem.active::before{display:none;}
 .ui2 .navitem span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 
-/* Thẻ cuối sidebar (giống thẻ "Upgrade to Pro" của mẫu) — trạng thái kỳ lương */
-.sb-card{margin:14px 12px 12px;padding:16px;border-radius:12px;color:#fff;flex:none;
-  background:linear-gradient(135deg,#1F4377 0%,#285491 45%,#4A7CC4 100%);position:relative;overflow:hidden;}
-.sb-card::after{content:"";position:absolute;right:-28px;top:-28px;width:96px;height:96px;border-radius:50%;
-  background:rgba(255,255,255,0.08);}
-.sb-card-icon{margin-bottom:10px;color:#fff;}
-.sb-card-title{font-size:15px;font-weight:600;margin-bottom:4px;}
-.sb-card-text{font-size:12px;line-height:1.5;color:rgba(255,255,255,0.85);margin-bottom:12px;}
-.sb-card-btn{width:100%;height:36px;border:none;border-radius:8px;background:#fff;color:var(--accent);font:inherit;
-  font-size:13px;font-weight:600;cursor:pointer;position:relative;z-index:1;}
-.sb-card-btn:hover{background:#EEF3FA;}
 .sb-backdrop{display:none;}
 
 /* Thu gọn sidebar: chỉ còn icon */
@@ -761,8 +750,7 @@ body.ui2{background:var(--page);color:var(--ink);font-family:"Inter",system-ui,-
 .ui2 #app.sidebar-collapsed .sb-head{flex-direction:column;justify-content:center;height:auto;min-height:var(--topbar-h);padding:10px 0;gap:6px;}
 .ui2 #app.sidebar-collapsed .sb-brand-text,
 .ui2 #app.sidebar-collapsed .sb-label,
-.ui2 #app.sidebar-collapsed .navitem span,
-.ui2 #app.sidebar-collapsed .sb-card{display:none;}
+.ui2 #app.sidebar-collapsed .navitem span{display:none;}
 .ui2 #app.sidebar-collapsed .sb-logo{height:20px;}
 .ui2 #app.sidebar-collapsed #navroot{padding:12px 10px;width:auto;}
 .ui2 #app.sidebar-collapsed .navitem{justify-content:center;padding:0;height:40px;gap:0;}
@@ -802,6 +790,15 @@ body.ui2{background:var(--page);color:var(--ink);font-family:"Inter",system-ui,-
 .ui2 .topbar-status #storage-mode{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;}
 .ui2 .topbar-status[hidden]{display:none;}
 .tb-bell-dot{position:absolute;top:7px;right:8px;width:8px;height:8px;border-radius:50%;background:var(--brand-red);box-shadow:0 0 0 2px var(--surface);}
+/* Chuông cảnh báo: bấm xổ ra đúng nội dung "Kỳ … / Còn N cảnh báo…" — y hệt
+   cách nút tài liệu tròn (.tb-doc/.tb-doc-menu) xổ ra thao tác của trang. */
+.tb-bell-wrap{position:relative;flex:none;}
+.tb-bell-menu{position:absolute;right:0;top:calc(100% + 8px);z-index:60;width:260px;background:var(--surface);
+  border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow);padding:12px;}
+.tb-bell-menu[hidden]{display:none;}
+.tb-bell-menu-title{font-size:13px;font-weight:700;color:var(--ink-strong);}
+.tb-bell-menu-text{font-size:12.5px;color:var(--ink-muted);margin-top:4px;line-height:1.4;}
+.tb-bell-menu .btn{margin-top:10px;width:100%;}
 .tb-sep{width:1px;height:24px;background:var(--border);}
 .tb-user{display:flex;align-items:center;gap:10px;}
 .tb-avatar{width:34px;height:34px;flex:none;border-radius:50%;display:flex;align-items:center;justify-content:center;
@@ -922,26 +919,57 @@ body.ui2{background:var(--page);color:var(--ink);font-family:"Inter",system-ui,-
 .pg-hide{display:none !important;}
 
 /* =============================================================================
-   BẢNG: đầu bảng trắng chữ xám thường, chỉ kẻ ngang
+   BẢNG: đầu bảng trắng chữ xám thường, kẻ ngang + kẻ dọc mờ chia cột
    ============================================================================= */
 .ui2 .tablewrap{border:1px solid var(--border);border-radius:var(--radius-lg);background:var(--surface);}
 .ui2 table{font-size:13.5px;border-collapse:collapse;}
 /* Đầu bảng: nền xanh nhạt theo màu logo, chữ xanh đậm — tách rõ khỏi phần dữ liệu */
 .ui2 thead th{position:sticky;top:0;background:var(--thead-bg2);color:var(--thead-ink2);font-size:12.5px;font-weight:600;
-  text-transform:none;letter-spacing:0;padding:13px 16px;border-bottom:1px solid var(--thead-line2);border-right:none;white-space:nowrap;}
-.ui2 tbody td{padding:13px 16px;border-bottom:1px solid var(--border-soft);border-right:none;vertical-align:middle;color:var(--ink);}
+  text-transform:none;letter-spacing:0;padding:13px 16px;border-bottom:1px solid var(--thead-line2);border-right:1px solid var(--thead-line2);white-space:nowrap;}
+.ui2 tbody td{padding:13px 16px;border-bottom:1px solid var(--border-soft);border-right:1px solid var(--border-soft);vertical-align:middle;color:var(--ink);}
+.ui2 thead th:last-child,.ui2 tbody td:last-child{border-right:none;}
 .ui2 tbody tr:last-child td{border-bottom:none;}
-.ui2 tbody tr:hover{background:#FAFBFC;}
-.ui2 tfoot .total-row td{background:var(--surface-2);border-top:1px solid var(--border);color:var(--ink-strong);padding:13px 16px;}
+.ui2 tbody tr:hover{background:var(--accent-soft);}
+.ui2 tfoot .total-row td{background:var(--surface-2);border-top:1px solid var(--border);border-right:1px solid var(--border-soft);color:var(--ink-strong);padding:13px 16px;}
+.ui2 tfoot .total-row td:last-child{border-right:none;}
 .ui2 table.payroll-table{font-size:13px;}
 .ui2 table.payroll-table thead th,.ui2 table.payroll-table tbody td,.ui2 table.payroll-table tfoot td{padding-left:10px;padding-right:10px;}
 .ui2 td.strong{color:var(--ink-strong);font-weight:600;}
 .ui2 .row-warn{background:var(--warn-faint) !important;}
+/* Highlight dòng ở Lịch lái xe (bấm chuột trái) — màu riêng, không lẫn với
+   hover/row-warn/row-muted, giữ nguyên khi chuột rời dòng (xem bindTrips()). */
+.ui2 .row-highlight, .ui2 .row-highlight:hover{background:var(--warn-soft) !important;}
 .ui2 .empty{padding:40px 16px;color:var(--ink-muted);}
 .ui2 tbody td > b{white-space:nowrap;color:var(--ink-strong);font-weight:600;}
 .ui2 td:has(> .btn.sm){white-space:nowrap;}
 .ui2 table:has(#trip-select-all) td:nth-child(2),
 .ui2 table:has(#trip-select-all) td:nth-child(4){white-space:nowrap;}
+
+/* Lọc riêng theo cột ở Lịch lái xe — biểu tượng phễu cạnh tên cột, bấm mới
+   xổ ra panel lọc kiểu Excel (dựng bằng JS, gắn vào <body>, xem bindTrips())
+   nên không cần style vị trí ở đây, chỉ cần style nội dung bên trong panel.
+   Panel có kích thước CỐ ĐỊNH (width + .cf-list max-height) — không phụ
+   thuộc nội dung bảng phía sau, không làm bảng đổi cỡ. */
+.th-label{vertical-align:middle;}
+.th-filter-btn{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;margin-left:4px;
+  border:none;background:none;padding:0;border-radius:4px;color:inherit;opacity:.6;cursor:pointer;vertical-align:middle;}
+.th-filter-btn:hover{opacity:1;}
+.th-filter-btn.active{opacity:1;color:var(--warn);}
+.th-filter-panel{position:fixed;z-index:200;width:240px;background:var(--surface);border:1px solid var(--border);
+  border-radius:10px;box-shadow:var(--shadow);padding:10px;display:flex;flex-direction:column;gap:8px;}
+.th-filter-panel .cf-search-input{height:32px;padding:0 8px;border:1px solid var(--border);border-radius:7px;
+  background:var(--surface);color:var(--ink);font:inherit;font-size:13px;}
+.th-filter-panel .cf-all-row{padding-bottom:7px;border-bottom:1px solid var(--border-soft);}
+.th-filter-panel .cf-check{display:flex;align-items:center;gap:7px;font-size:13.5px;color:var(--ink);padding:3px 2px;
+  border-radius:5px;cursor:pointer;}
+.th-filter-panel .cf-check:hover{background:var(--surface-2);}
+.th-filter-panel .cf-check input[type="checkbox"]{flex:none;}
+/* Danh sách cuộn riêng: dọc để xem hết giá trị dài danh sách, ngang để xem
+   hết chữ dài (VD "Khách hàng — Chi tiết") mà không bị cắt/wrap xuống dòng. */
+.th-filter-panel .cf-list{max-height:220px;overflow-y:auto;overflow-x:auto;display:flex;flex-direction:column;gap:1px;}
+.th-filter-panel .cf-check-label{white-space:nowrap;}
+.th-filter-panel .cf-count{white-space:nowrap;flex:none;margin-left:auto;padding-left:6px;}
+.th-filter-panel .cf-actions{display:flex;justify-content:flex-end;gap:8px;padding-top:7px;border-top:1px solid var(--border-soft);}
 
 /* Cột thao tác "⋯" + menu nổi */
 .td-actions{width:1%;text-align:right;white-space:nowrap;}
@@ -1027,7 +1055,7 @@ body.ui2{background:var(--page);color:var(--ink);font-family:"Inter",system-ui,-
   .ui2 #app.sidebar-collapsed #sidebar{width:min(280px,86vw);}
   .ui2 #app.sidebar-collapsed .sb-head{flex-direction:row;justify-content:space-between;padding:0 12px 0 16px;}
   .ui2 #app.sidebar-collapsed .sb-brand-text{display:flex;}
-  .ui2 #app.sidebar-collapsed .sb-label,.ui2 #app.sidebar-collapsed .sb-card{display:block;}
+  .ui2 #app.sidebar-collapsed .sb-label{display:block;}
   .ui2 #app.sidebar-collapsed .navitem span{display:inline;}
   .ui2 #app.sidebar-collapsed .navitem{justify-content:flex-start;padding:0 12px;gap:11px;height:38px;}
   .ui2 #topbar{padding:0 12px;gap:8px;}

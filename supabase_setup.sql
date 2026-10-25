@@ -97,12 +97,19 @@ CREATE TABLE routes (
 -- LOẠI PHỤ CẤP
 -- -----------------------------------------------------------------------------
 CREATE TABLE allowance_types (
-  id            TEXT          PRIMARY KEY,
-  name          TEXT          NOT NULL,
-  unit          VARCHAR(30)   NOT NULL,
-  min_days      INTEGER,
-  standard_days INTEGER,
-  rates         JSONB         NOT NULL DEFAULT '{}'::jsonb
+  id                TEXT          PRIMARY KEY,
+  name              TEXT          NOT NULL,
+  unit              VARCHAR(30)   NOT NULL,
+  min_days          INTEGER,
+  standard_days     INTEGER,
+  once_only         BOOLEAN,
+  rates             JSONB         NOT NULL DEFAULT '{}'::jsonb,
+  -- BKS áp dụng riêng theo từng dự án — {"<mã dự án>": ["<BKS>", ...]}. Dự án
+  -- không có khoá ở đây (hoặc danh sách rỗng) = áp dụng cho MỌI xe chạy dự
+  -- án đó. Chỉ có ý nghĩa với đơn vị tính 1 số/dự án (không áp dụng cho
+  -- "Theo tải trọng xe"/"theo km × tải trọng" — 2 loại đó đã tự giới hạn
+  -- theo tải trọng xe).
+  plates_by_project JSONB
 );
 
 CREATE TABLE allowance_configs (

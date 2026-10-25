@@ -1,7 +1,7 @@
 ﻿/* =========================================================================
    VIT TRANS — HỆ THỐNG TÍNH LƯƠNG LÁI XE
    Toàn bộ số tiền đều tra từ các bảng cấu hình (mỗi Khách hàng một cách tính
-   lương chuyến — theo tuyến / theo km / lương cứng / theo chuyến + bốc xếp —
+   lương chuyến — theo tuyến / theo chuyến / theo km / lương cứng —
    cùng bảng đơn giá Khách hàng+Tuyến, phụ cấp theo lái xe, phụ cấp rớt điểm
    theo tải trọng xe áp dụng chung mọi khách hàng) — không hard-code trong code.
    Lưu trữ chạy được ở 2 chế độ, tự nhận biết:
@@ -126,6 +126,31 @@ function allowanceRateFor(type, project, capacity){
   }
   return safeNum(entry);
 }
+// Giới hạn BKS áp dụng của 1 loại phụ cấp cho 1 dự án (cấu hình ở Cấu hình ›
+// Phụ cấp › Sửa, cột "BKS áp dụng" bên cạnh "Đơn giá" — xem openTypeModal) —
+// để trống/không cấu hình nghĩa là áp dụng cho MỌI xe chạy dự án đó (không
+// giới hạn gì, giữ đúng hành vi cũ). Chỉ áp dụng cho bảng đơn giá ĐƠN GIẢN
+// (1 số/dự án) — "Theo tải trọng xe"/"theo km × tải trọng" đã tự giới hạn
+// theo tải trọng xe nên không có cột này (xem ratesTableHtml).
+function allowancePlatesFor(type, project){
+  const list = type && type.platesByProject ? type.platesByProject[project] : null;
+  return (list && list.length) ? list : null;
+}
+function allowanceAppliesToPlate(type, project, plate){
+  const list = allowancePlatesFor(type, project);
+  return !list || list.includes(plate);
+}
+// Chuyến hợp lệ của 1 dự án để tính 1 loại phụ cấp — đã lọc "Nghỉ" + đúng dự
+// án + (nếu có giới hạn BKS) đúng xe trong danh sách BKS áp dụng. Dùng ở mọi
+// nhánh calcPhuCap cần đếm ngày công/số chuyến theo dự án (perPeriod/
+// perTrip/perDay/perOccurrence/perPeriodMinDays/perProratedMonth/
+// perOccurrenceByProject) để xe KHÔNG nằm trong BKS áp dụng không được tính
+// khoản này dù lái xe có chạy dự án đó bằng xe khác.
+function allowanceTripsFor(type, project, trips){
+  const base = trips.filter(t=>!isOffTrip(t) && t.project===project);
+  const plates = allowancePlatesFor(type, project);
+  return plates ? base.filter(t=>plates.includes(t.plate)) : base;
+}
 // Phụ cấp "mỗi chuyến theo km × tải trọng xe" (vd Phụ cấp ăn của NTF) — mỗi
 // dự án có 1 bảng bậc thang km × tải trọng RIÊNG (rates[project] = {tiers,
 // brackets}, đúng cấu trúc như 1 khu vực của khách hàng "Theo km" — xem
@@ -158,19 +183,23 @@ function tripAllowanceByKmCapacity(at, trip){
 // "Theo lần phát sinh" mới cần chấm công tay mỗi kỳ.
 function unitNeedsManualUsage(v){ return v==='perOccurrence' || v==='perOccurrenceByProject'; }
 
-/* Mỗi khách hàng có một cách tính lương chuyến riêng. "route" và "km" dùng
-   đơn giá tra theo Khách hàng (+ Tuyến với "route"); "fixed" nghĩa là lái xe
-   ăn lương cứng nên chuyến chỉ ghi nhận vận hành, không cộng thêm lương;
-   "tripPlusExtras" là lương/chuyến (tra theo Khách hàng + Tuyến) cộng thêm
-   bốc xếp tính theo số lượng nhập trên từng chuyến. Phụ cấp rớt điểm (từ
-   điểm giao thứ 2 trở đi, theo tải trọng xe) áp dụng chung cho MỌI khách
-   hàng, không còn là đơn giá riêng theo từng khách hàng nữa — xem
-   POINT_DROP_TIERS bên dưới. */
+/* Mỗi khách hàng có một cách tính lương chuyến riêng. "route" và "tripPlusExtras"
+   đều tra đơn giá theo Khách hàng + Tuyến (bảng "Lương theo tuyến") — khác
+   nhau ở TÊN GỌI thôi ("Theo tuyến cố định" / "Theo chuyến", tách riêng theo yêu cầu
+   người dùng ngày 2026-10-23 vì 2 nhóm khách hàng gọi khác nhau), không
+   khác gì về cách tính; "km" dùng bậc thang km × tải trọng xe; "fixed"
+   nghĩa là lái xe ăn lương cứng nên chuyến chỉ ghi nhận vận hành, không
+   cộng thêm lương. Bốc xếp (nếu khách hàng có) tính riêng ở Cấu hình › Phụ
+   cấp, không còn là 1 phần của cách tính lương chuyến nữa (đã bỏ đơn giá
+   bốc xếp + ô "Số lượt bốc xếp" khỏi "tripPlusExtras" — khách SGW/BHX dùng
+   cách tính này). Phụ cấp rớt điểm (từ điểm giao thứ 2 trở đi, theo tải
+   trọng xe) áp dụng chung cho MỌI khách hàng, không còn là đơn giá riêng
+   theo từng khách hàng nữa — xem POINT_DROP_TIERS bên dưới. */
 const CUSTOMER_CALC_METHODS = [
-  {v:'route',          l:'Theo tuyến'},
+  {v:'route',          l:'Theo tuyến cố định'},
   {v:'km',              l:'Theo km'},
   {v:'fixed',           l:'Lương cứng'},
-  {v:'tripPlusExtras',  l:'Theo chuyến + bốc xếp'},
+  {v:'tripPlusExtras',  l:'Theo chuyến'},
 ];
 function calcMethodLabel(v){ return (CUSTOMER_CALC_METHODS.find(m=>m.v===v)||{}).l || v; }
 
@@ -190,6 +219,23 @@ const expandedRows = new Set();
 // — giữ nguyên qua các lần vẽ lại trang (đổi bộ lọc, sửa 1 chuyến khác...)
 // giống cách "expandedRows" giữ trạng thái mở/đóng dòng ở Bảng lương.
 const selectedTripIds = new Set();
+// Cột tick chọn để xoá hàng loạt ở "Lịch lái xe" MẶC ĐỊNH ẨN — chỉ hiện ra
+// sau khi bấm "Yêu cầu xoá" trong menu "Thao tác" (gộp cùng Tải mẫu/Nhập
+// Excel ở đầu trang), tránh chiếm chỗ/rối mắt khi không có nhu cầu xoá
+// hàng loạt. Tắt lại (bấm "Huỷ yêu cầu xoá") thì ẩn cột + bỏ hết tick đang chọn.
+let tripBulkDeleteRequested = false;
+// Cột lọc nào (biểu tượng phễu trên tiêu đề, xem renderTrips) đang xổ ô lọc
+// ra — null = không cột nào đang mở. Giữ ở biến module-level (không phải
+// trong filters.trips) vì đây chỉ là trạng thái HIỆN/ẨN ô lọc, không phải
+// giá trị lọc thật (giá trị lọc thật nằm ở filters.trips.col).
+let tripColFilterOpen = null;
+document.addEventListener('click', e=>{
+  if(tripColFilterOpen && !e.target.closest('.th-filter-btn, .th-filter-panel')){
+    tripColFilterOpen = null;
+    const p = document.querySelector('.th-filter-panel');
+    if(p) p.remove();
+  }
+});
 // Modal đang mở có bảng bậc thang km × tải trọng (Sửa khách hàng / Cấu hình
 // phụ cấp) đăng ký hook vào đây để cơ chế "giữ chuột ~1s để kéo đổi vị trí
 // dòng/cột" dùng chung (bindKmDragReorder ở dưới) biết cách sync/đổi vị
@@ -206,7 +252,16 @@ let payrollWarnings = [];
 let warningsOpen = false;
 const filters = {
   payroll:{ driver:'', project:'', q:'' },
-  trips:  { driver:'', project:'', q:'' },
+  // "col": lọc riêng theo từng cột ở Lịch lái xe (biểu tượng phễu lọc trên
+  // tiêu đề, xổ ra danh sách giá trị UNIQUE để tick chọn giống Excel — xem
+  // renderTrips/bindTrips). Mỗi mảng chứa các giá trị bị LOẠI TRỪ (không
+  // phải giá trị được chọn) — rỗng [] nghĩa là KHÔNG lọc gì (hiện hết), quy
+  // ước này cho phép "bỏ tick hết" có trạng thái rõ ràng (= loại trừ toàn bộ
+  // giá trị hiện có) mà không cần cờ phụ nào khác. Tách khỏi driver/project/q
+  // (bộ lọc chung ở đầu trang) để không lẫn 2 cơ chế.
+  trips:  { driver:'', project:'', q:'', col: {
+    date:[], plate:[], detail:[], place:[], types:[], base:[], price:[], meal:[],
+  } },
   deduct: { driver:'', q:'' },
   usage:  { driver:'' },
   fuel:   { driver:'' },
@@ -214,6 +269,7 @@ const filters = {
   drivers: { q:'' },
   vehicles: { q:'' },
   customers: { q:'' },
+  allowance: { q:'' },
 };
 // Trước đây mỗi trang Chuyến đi/Khấu trừ có 1 dropdown riêng "Chỉ kỳ đang
 // xem"/"Tất cả các kỳ" (filters.trips.scope/filters.deduct.scope) — giờ gộp
@@ -397,7 +453,7 @@ function kmBracketRateFor(cust, regionName, km, capacity){
 }
 // "Dự án" (project) trong dữ liệu chính là mã Khách hàng. Khách hàng chưa có
 // cấu hình riêng (chưa vào mục "Khách hàng") vẫn liệt kê được ở đây, để không
-// mất dữ liệu cũ, và mặc định coi như tính lương "Theo tuyến".
+// mất dữ liệu cũ, và mặc định coi như tính lương "Theo tuyến cố định".
 function allProjects(){
   return distinct(state.customers.map(c=>c.code)
     .concat(state.routes.map(r=>r.project))
@@ -419,22 +475,23 @@ function tripsOfPeriod(period){ return state.trips.filter(t=>getPeriod(t.date)==
 //     — nghỉ nhiều thì hưởng ít hơn mức lương cứng đã đặt, giống cách tính
 //     phụ cấp "theo tỷ lệ ngày công / công chuẩn".
 const FIXED_SALARY_STANDARD_DAYS = 26;
-// "Phụ cấp đường dài" theo NGÀY chạy NTF — cộng thêm vào Lương cố định một
-// khoản tra theo bảng "Phụ cấp đường dài" của NTF (theo đúng tải trọng xe
-// chạy ngày đó / 28 ngày — LONG_HAUL_STANDARD_DAYS, xem longHaulGroupTotal ở
+// "Phụ cấp đường dài" theo NGÀY chạy NTF — tính vào Lương cố định một khoản
+// tra theo bảng "Phụ cấp đường dài" của NTF (theo đúng tải trọng xe chạy
+// ngày đó / 28 ngày — LONG_HAUL_STANDARD_DAYS, xem longHaulGroupTotal ở
 // dưới), KHÔNG phụ thuộc lái xe có bật "Lương cứng" hay không vì đơn giá lấy
 // từ cấu hình khách hàng NTF chứ không phải mức lương cứng của lái xe. Áp
 // dụng ĐỒNG NHẤT cho MỌI lái xe (đã bỏ khái niệm "Khách hàng gốc của xe" —
-// xác nhận với người dùng ngày 2026-10-20, chọn quy tắc chặt hơn trong 2
-// phương án): chỉ ngày nào chạy TRỌN NGÀY cho NTF (100% chuyến trong ngày
-// đều ghi Khách hàng = NTF, không xen lẫn khách khác — xem fullDayLongHaulDayTrips)
-// mới được tính, không còn phân biệt "xe có thuộc về NTF" hay không nữa.
+// xác nhận với người dùng ngày 2026-10-20): chỉ ngày nào chạy TRỌN NGÀY cho
+// NTF mới được tính — xem đúng điều kiện "trọn ngày" (đã nới lại ngày
+// 2026-10-23) ở fullDayLongHaulDayTrips, không còn phân biệt "xe có thuộc
+// về NTF" hay không nữa.
+// Với lái xe CÓ "Lương cứng": ngày chạy trọn NTF/khách tương tự THAY CHO
+// ngày công hưởng Lương cứng, không cộng dồn cả 2 khoản cho cùng 1 ngày
+// (xác nhận với người dùng ngày 2026-10-23) — xem "ntfDates" loại ngày đó
+// khỏi "workDays" bên dưới.
 function calcLuongCoDinh(driverCode, trips){
   const driver = driverByCode(driverCode);
   const total = (driver && driver.hasFixedSalary) ? safeNum(driver.fixedSalaryAmount) : 0;
-  const workDays = tripDaysCount(trips);
-  const paidDays = Math.min(workDays, FIXED_SALARY_STANDARD_DAYS);
-  const base = total ? Math.round(total * paidDays / FIXED_SALARY_STANDARD_DAYS) : 0;
 
   // "Phụ cấp đường dài theo ngày" — trước đây gắn cứng mã 'NTF'; giờ áp dụng
   // cho MỌI khách hàng bật ô "Tính theo ngày chạy trọn khách này" ở hồ sơ
@@ -447,6 +504,29 @@ function calcLuongCoDinh(driverCode, trips){
     return cust ? longHaulMonthlyAmount(cust, veh ? veh.capacity : 0) : null;
   });
   const ntfDayQty = ntfDayResult.qty, ntfDayAmount = ntfDayResult.amount;
+  // Ngày đã nhận "Phụ cấp đường dài" (chạy trọn ngày cho NTF/KL…) thì KHÔNG
+  // tính vào ngày công hưởng Lương cứng nữa — ngày đó lái xe chạy cho khách
+  // "Theo km" trả theo Phụ cấp đường dài THAY CHO Lương cố định, không phải
+  // chạy cho khách trả lương cứng của lái xe, nên không được cộng cả 2 (xác
+  // nhận với người dùng ngày 2026-10-23, sửa lại từ bản trước cộng dồn cả 2).
+  const ntfDates = new Set(ntfDays.map(t=>t.date));
+  const workTrips = trips.filter(t=>!isOffTrip(t) && !ntfDates.has(t.date));
+  const workDays = tripDaysCount(workTrips);
+  const paidDays = Math.min(workDays, FIXED_SALARY_STANDARD_DAYS);
+  const base = total ? Math.round(total * paidDays / FIXED_SALARY_STANDARD_DAYS) : 0;
+  // Ghi rõ TỪNG NGÀY hưởng Lương cứng theo ngày công (không gộp vào 1 dòng
+  // tổng) — mỗi ngày 1 dòng, đơn giá tham khảo = tổng mức lương cứng / công
+  // chuẩn (như cách ntfDayLines/standbyLines đã làm ở trên). Ngày VƯỢT công
+  // chuẩn (quá paidDays) vẫn liệt kê để biết lái xe có đi làm ngày đó, nhưng
+  // không tính thêm tiền (paid=false) vì base đã bị chặn ở FIXED_SALARY_STANDARD_DAYS.
+  const perWorkDayRate = total ? Math.round(total / FIXED_SALARY_STANDARD_DAYS) : 0;
+  const workDayLines = distinct(workTrips.map(t=>t.date)).sort().map((date, idx)=>{
+    const t = workTrips.find(x=>x.date===date);
+    const veh = vehicleByPlate(t.plate);
+    const paid = idx < paidDays;
+    return { date, plate: t.plate, capacity: veh ? veh.capacity : null, project: t.project,
+      amount: paid ? perWorkDayRate : 0, paid };
+  });
   // Danh sách từng ngày (để hiện chi tiết ở Bảng lương, xem renderPayrollRow)
   // — số tiền/ngày ở đây chỉ mang tính THAM KHẢO (monthly/28 làm tròn riêng
   // từng dòng), số tiền THẬT lấy ở ntfDayAmount (làm tròn 1 lần trên tổng
@@ -460,7 +540,7 @@ function calcLuongCoDinh(driverCode, trips){
       amount: monthly ? Math.round(monthly / LONG_HAUL_STANDARD_DAYS) : 0 };
   }).filter(l=>l.amount>0).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
 
-  // "Lương trực" — khách hàng "Theo tuyến" có cấu hình 3 ô Lương trực RIÊNG
+  // "Lương trực" — khách hàng "Theo tuyến cố định" có cấu hình 3 ô Lương trực RIÊNG
   // (standbyUpTo5/8/15 — trước đây dùng chung 3 ô longHaulUpTo5/8/15 với
   // "Phụ cấp đường dài", đổi cách tính khách hàng là 2 khoản lẫn sang nhau;
   // xem standbyTiersFor): mỗi NGÀY lái xe có ít nhất 1 chuyến Loại "Trực"
@@ -491,14 +571,14 @@ function calcLuongCoDinh(driverCode, trips){
   standbyLines.sort((a,b)=>String(a.date).localeCompare(String(b.date)));
 
   if(!total && !ntfDayAmount && !standbyAmount){
-    return { actual:0, total:0, base:0, workDays:0, standardDays:FIXED_SALARY_STANDARD_DAYS,
+    return { actual:0, total:0, base:0, workDays:0, standardDays:FIXED_SALARY_STANDARD_DAYS, workDayLines:[],
       ntfDayQty:0, ntfDayAmount:0, ntfDayLines:[], standbyQty:0, standbyAmount:0, standbyLines:[] };
   }
-  return { actual: base + ntfDayAmount + standbyAmount, total, base, workDays, standardDays:FIXED_SALARY_STANDARD_DAYS,
+  return { actual: base + ntfDayAmount + standbyAmount, total, base, workDays, standardDays:FIXED_SALARY_STANDARD_DAYS, workDayLines,
     ntfDayQty, ntfDayAmount, ntfDayLines, standbyQty, standbyAmount, standbyLines };
 }
 
-// Đơn giá GỐC của một chuyến (chưa gồm bốc xếp), tuỳ theo cách tính
+// Đơn giá GỐC của một chuyến, tuỳ theo cách tính
 // lương của khách hàng (trip.project = mã khách hàng):
 //   route / tripPlusExtras -> tra bảng Khách hàng + Tuyến, tăng cường dùng
 //     "đơn giá tăng cường" của tuyến, để trống thì lấy đơn giá thường.
@@ -571,25 +651,16 @@ function tripBasePrice(trip){
   return safeNum(r.price);
 }
 
-// Phụ phí bốc xếp — chỉ áp dụng cho khách hàng tính "Theo chuyến + bốc xếp"
-// (vd SGW, BHX), cộng thẳng vào Lương chuyến/Lương tăng cường của chuyến đó
-// theo số lượt bốc xếp khai trên chuyến.
-function tripExtrasAmount(trip){
-  const cust = customerByCode(trip.project);
-  if(!cust || cust.calcMethod !== 'tripPlusExtras') return 0;
-  return safeNum(trip.loadingCount) * safeNum(cust.loadingPrice);
-}
-// Đơn giá đầy đủ của chuyến (gốc + phụ phí) — dùng để hiển thị và tính lương.
-// (Phụ cấp rớt điểm KHÔNG nằm trong đơn giá chuyến — tính riêng ở calcPhuCap
-// vì phụ thuộc tải trọng xe chạy chuyến, không phụ thuộc khách hàng.)
+// Đơn giá chuyến dùng để hiển thị và tính lương. (Phụ cấp rớt điểm KHÔNG
+// nằm trong đơn giá chuyến — tính riêng ở calcPhuCap vì phụ thuộc tải trọng
+// xe chạy chuyến, không phụ thuộc khách hàng. Bốc xếp, nếu khách hàng có,
+// tính riêng ở Phụ cấp — xem ghi chú CUSTOMER_CALC_METHODS ở trên.)
 // "Trả hàng"/"Trực" luôn 0đ — xem ghi chú ở TRIP_TYPES. Ngày đó vẫn được
 // tính là 1 ngày công riêng cho Lương cố định (xem tripDaysCount — đếm theo
 // ngày, không phụ thuộc đơn giá chuyến).
 function tripUnitPrice(trip){
   if(isZeroRevenueTrip(trip)) return 0;
-  const base = tripBasePrice(trip);
-  if(base === null) return null;
-  return base + tripExtrasAmount(trip);
+  return tripBasePrice(trip);
 }
 
 // Phụ cấp rớt điểm — áp dụng cho MỌI khách hàng có nhập "Số điểm giao" trên
@@ -682,11 +753,12 @@ function tieredMonthlyAmount(tiers, capacity){
   const tier = tiers.find(t => cap <= t.upToCapacity);
   return safeNum(tier ? tier.amount : tiers[tiers.length-1].amount);
 }
-// "Lương trực" — 3 ô RIÊNG (standbyUpTo5/8/15) của khách hàng "Theo tuyến",
-// tách khỏi 3 ô "Phụ cấp đường dài" (longHaulUpTo5/8/15) của khách "Theo
-// km" để đổi cách tính khách hàng không làm 2 khoản lẫn sang nhau. Dữ liệu
-// cũ (trước khi tách — Lương trực còn nằm ở longHaulUpTo*) vẫn đọc được: khách
-// "Theo tuyến" chưa có ô Lương trực riêng nào thì dùng tạm 3 ô cũ.
+// "Lương trực" — 3 ô RIÊNG (standbyUpTo5/8/15) của khách hàng "Theo tuyến
+// cố định", tách khỏi 3 ô "Phụ cấp đường dài" (longHaulUpTo5/8/15) của khách
+// "Theo km" để đổi cách tính khách hàng không làm 2 khoản lẫn sang nhau. Dữ
+// liệu cũ (trước khi tách — Lương trực còn nằm ở longHaulUpTo*) vẫn đọc
+// được: khách "Theo tuyến cố định" chưa có ô Lương trực riêng nào thì dùng
+// tạm 3 ô cũ.
 function standbyTiersFor(cust){
   if(!cust) return [];
   const own = [
@@ -700,13 +772,16 @@ function standbyTiersFor(cust){
 }
 function customerHasStandbyConfig(cust){ return standbyTiersFor(cust).length>0; }
 function standbyMonthlyAmount(cust, capacity){ return tieredMonthlyAmount(standbyTiersFor(cust), capacity); }
-// Khách hàng có bật "Phụ cấp đường dài theo ngày chạy trọn khách này" — dữ
-// liệu cũ chưa có ô này (undefined/null) thì giữ đúng như trước: chỉ NTF.
+// Khách hàng có bật "Phụ cấp đường dài theo ngày chạy trọn khách này" —
+// CHỈ dựa vào đúng ô này, không còn mặc định ngầm riêng cho mã 'NTF' nữa
+// (bỏ theo yêu cầu người dùng ngày 2026-10-23: mặc định ngầm khiến khách
+// hàng khác — vd KL — cũng là khách "Theo km" nhưng chưa tích ô này thì
+// không được tính, trong khi NTF tự nhận do trùng mã). Mọi khách hàng
+// (kể cả NTF) đều phải tích rõ ô này ở Cấu hình › Khách hàng mới được tính
+// — file nâng cấp SQL ngày 22/10/2026 đã tự bật sẵn true cho NTF trên dữ
+// liệu production, nên NTF không bị mất khoản này.
 function customerHasFullDayLongHaul(cust){
-  if(!cust) return false;
-  if(cust.longHaulFullDay===true) return true;
-  if(cust.longHaulFullDay===false) return false;
-  return cust.code==='NTF';
+  return !!cust && cust.longHaulFullDay===true;
 }
 // Cộng dồn "Phụ cấp đường dài" cho 1 tập ngày/chuyến, làm tròn 1 LẦN trên
 // tổng theo từng mức tháng (ứng với từng tải trọng xe) — KHÔNG làm tròn
@@ -736,23 +811,51 @@ function isLongHaulSurgeTrip(trip){
   const status = surgeOuterKmStatus(cust, trip);
   return !!status && status.over;
 }
-// Ngày lái xe chạy TRỌN NGÀY riêng cho NTF (mọi chuyến THẬT trong ngày đó
-// đều ghi Khách hàng = NTF, không xen lẫn khách khác) — áp dụng ĐỒNG NHẤT
-// cho mọi lái xe (xem calcLuongCoDinh/calcPhuCap): mỗi ngày như vậy được
-// cộng "Phụ cấp đường dài" tra theo đúng tải trọng xe chạy ngày đó / 28
-// ngày. LOẠI TRỪ chuyến Loại "Nghỉ" trước khi xét — nếu không, 1 ngày chỉ
-// có đúng 1 dòng "Nghỉ" ghi Khách hàng NTF (xe không hoạt động) vẫn bị tính
-// nhầm là "ngày trọn vẹn cho NTF" vì không còn dòng nào khác để so sánh
-// (every() trên mảng chỉ có 1 phần tử luôn đúng) — xe nghỉ thì không được
-// tính bất cứ khoản gì, kể cả khoản này. Trả về 1 chuyến đại diện mỗi ngày
-// (để tra xe/tải trọng).
+// Ngày lái xe chạy TRỌN NGÀY riêng cho NTF — mỗi ngày như vậy được cộng
+// "Phụ cấp đường dài" (tra theo đúng tải trọng xe chạy ngày đó / 28 ngày)
+// THAY CHO ngày công Lương cố định, áp dụng ĐỒNG NHẤT cho mọi lái xe (xem
+// calcLuongCoDinh/calcPhuCap). LOẠI TRỪ chuyến Loại "Nghỉ" trước khi xét —
+// xe nghỉ thì không được tính bất cứ khoản gì, kể cả khoản này.
+//
+// Quy tắc xét "trọn ngày" (nới lại ngày 2026-10-23 — trước đây bắt MỌI
+// chuyến trong ngày phải cùng 1 khách hàng, xem ví dụ dưới để hiểu lý do
+// nới): chỉ xét các chuyến Loại "Chuyến" (THƯỜNG), "Trả hàng" và "Trực"
+// (thêm 2 loại này cùng ngày — xác nhận với người dùng ngày 2026-10-23:
+// "Trả hàng"/"Trực" là lượt trả/giao tiếp hoặc trực chờ của ĐÚNG khách hàng
+// chính ngày đó, vẫn là "ngày công chính", khác Tăng cường/Trả điểm) để xác
+// định khách hàng của ngày — MỌI chuyến "Chuyến"/"Trả hàng"/"Trực" trong
+// ngày phải cùng 1 khách hàng (và khách đó có bật Phụ cấp đường dài theo
+// ngày) thì ngày đó mới tính trọn. Các chuyến loại KHÁC (Tăng cường/Trả
+// điểm) trong ngày (của khách đó HAY khách khác, VD 1 chuyến Tăng cường cho
+// khách Theo tuyến cố định khác) KHÔNG làm mất "ngày trọn" nữa — ví dụ: 1
+// ngày có chuyến "Tăng cường" cho khách Theo tuyến cố định (GHN) và chuyến
+// "Chuyến" cho khách Theo km có bật cờ này (KL) vẫn được tính trọn ngày cho
+// KL, cộng thêm Lương theo km + Lương tăng cường của GHN như bình thường
+// (không cộng dồn 2 khoản trái nhau, chỉ là 2 khoản độc lập cộng vào 2 mục
+// khác nhau). Ngược lại, ngày KHÔNG có chuyến "Chuyến"/"Trả hàng"/"Trực"
+// nào (VD lái xe chỉ chạy đúng 1 khách Theo km nhưng để "Tăng cường" cho cả
+// ngày, không xen khách nào khác) thì KHÔNG tính "ngày trọn" — Tăng
+// cường/Trả điểm là chuyến phát sinh thêm, trả riêng theo khoản tương ứng,
+// không thay được "ngày công chính" để đổi qua Phụ cấp đường dài. Trả về 1
+// chuyến đại diện mỗi ngày (để tra xe/tải trọng).
 function fullDayLongHaulDayTrips(trips){
   const byDate = {};
   trips.filter(t=>!isOffTrip(t)).forEach(t=>{ (byDate[t.date] = byDate[t.date] || []).push(t); });
-  return Object.keys(byDate).filter(d=>{
-    const first = byDate[d][0].project;
-    return customerHasFullDayLongHaul(customerByCode(first)) && byDate[d].every(t=>t.project===first);
-  }).map(d => byDate[d][0]);
+  const result = [];
+  Object.keys(byDate).forEach(d=>{
+    // Ngày KHÔNG có chuyến Loại "Chuyến"/"Trả hàng"/"Trực" nào (VD chỉ có
+    // đúng 1 chuyến "Tăng cường" cho đúng 1 khách Theo km, không xen khách
+    // nào khác) thì KHÔNG tính "ngày trọn" — Tăng cường/Trả điểm là chuyến
+    // phát sinh thêm, trả riêng theo khoản tương ứng, không phải "ngày công
+    // chính" của khách hàng đó để được thay bằng Phụ cấp đường dài.
+    const mainTrips = byDate[d].filter(t=>{ const ty = tripTypeOf(t); return ty==='normal' || ty==='return' || ty==='standby'; });
+    if(!mainTrips.length) return;
+    const first = mainTrips[0].project;
+    if(customerHasFullDayLongHaul(customerByCode(first)) && mainTrips.every(t=>t.project===first)){
+      result.push(mainTrips[0]);
+    }
+  });
+  return result;
 }
 // Ngày lái xe có ÍT NHẤT 1 chuyến Loại "Trực" ghi đúng khách hàng "project"
 // đó — dùng cho "Lương trực" (xem calcPhuCap), khác NTF ở chỗ không cần
@@ -827,6 +930,12 @@ function driverVehicleCapacity(driverCode){
 //     kỳ" -> nhập tay ở Chấm công phụ cấp, CHỈ nhập được 1 số/kỳ nên quy về
 //     dự án chính (driverMainProject) | "theo km" -> tra theo tải trọng/km
 //     thực tế của từng chuyến, vốn đã không qua dự án cố định từ trước.
+//     Riêng 7 đơn vị "1 số/dự án" kể trên (trừ "theo km"/"theo tải trọng
+//     xe") còn có thể giới hạn CHỈ áp dụng cho vài BKS cụ thể của dự án đó
+//     (platesByProject, cấu hình ở Cấu hình › Phụ cấp › Sửa) — xem
+//     allowanceTripsFor/allowanceAppliesToPlate: để trống thì áp dụng cho
+//     mọi xe như cũ, chọn vài BKS thì chuyến/ngày công của xe KHÁC không
+//     được tính (dù cùng lái xe, cùng dự án).
 function calcPhuCap(driver, trips, period){
   const capacity = driverVehicleCapacity(driver.code);
   const mainProject = driverManualProject(driver.code, trips, period);
@@ -849,6 +958,7 @@ function calcPhuCap(driver, trips, period){
       projectsRun.forEach(project=>{
         const rate = allowanceRateFor(at, project);
         if(rate===null) return;
+        if(!allowanceTripsFor(at, project, trips).length) return;
         lines.push({ name: `${at.name} (${project})`, target: driver.code, unit:at.unit, qty:1, rate, amount:rate });
         total += rate;
       });
@@ -856,7 +966,7 @@ function calcPhuCap(driver, trips, period){
       projectsRun.forEach(project=>{
         const rate = allowanceRateFor(at, project);
         if(rate===null) return;
-        const qty = trips.filter(t=>!isOffTrip(t) && t.project===project).length;
+        const qty = allowanceTripsFor(at, project, trips).length;
         if(qty<=0) return;
         const amount = rate * qty;
         lines.push({ name: `${at.name} (${project})`, target: driver.code, unit:at.unit, qty, rate, amount });
@@ -866,7 +976,7 @@ function calcPhuCap(driver, trips, period){
       projectsRun.forEach(project=>{
         const rate = allowanceRateFor(at, project);
         if(rate===null) return;
-        const days = tripDaysCount(trips.filter(t=>t.project===project));
+        const days = tripDaysCount(allowanceTripsFor(at, project, trips));
         if(days<=0) return;
         const amount = rate * days;
         lines.push({ name: `${at.name} (${project})`, target: driver.code, unit:at.unit, qty:days, rate, amount });
@@ -875,6 +985,7 @@ function calcPhuCap(driver, trips, period){
     } else if(at.unit==='perOccurrence'){
       const rate = allowanceRateFor(at, mainProject);
       if(rate===null) return;
+      if(!allowanceTripsFor(at, mainProject, trips).length) return;
       const usage = state.allowanceUsage.find(u=>u.targetType==='driver' && u.targetId===driver.code
         && u.allowanceTypeId===at.id && u.period===period);
       const qty = usage ? safeNum(usage.quantity) : 0;
@@ -883,22 +994,27 @@ function calcPhuCap(driver, trips, period){
       lines.push({ name: at.name, target: driver.code, unit:at.unit, qty, rate, amount });
       total += amount;
     } else if(at.unit==='perPeriodMinDays'){
-      projectsRun.forEach(project=>{
+      const minDays = safeNum(at.minDays) || 15;
+      // onceOnly (VD Phụ cấp điện thoại — lái xe chỉ có 1 số, không nhân
+      // theo số dự án chạy trong kỳ): chạy nhiều dự án đều đủ ngày công tối
+      // thiểu thì chỉ nhận đúng 1 lần, dừng ngay khi gặp dự án đủ điều kiện
+      // ĐẦU TIÊN — không cộng thêm cho các dự án đủ điều kiện còn lại.
+      for(const project of projectsRun){
         const rate = allowanceRateFor(at, project);
-        if(rate===null) return;
-        const days = tripDaysCount(trips.filter(t=>t.project===project));
-        const minDays = safeNum(at.minDays) || 15;
+        if(rate===null) continue;
+        const days = tripDaysCount(allowanceTripsFor(at, project, trips));
         if(days > minDays){
           lines.push({ name: `${at.name} (${project})`, target: driver.code, unit:at.unit, qty:1, rate, amount:rate });
           total += rate;
+          if(at.onceOnly) break;
         }
-      });
+      }
     } else if(at.unit==='perProratedMonth'){
       projectsRun.forEach(project=>{
         const rate = allowanceRateFor(at, project);
         if(rate===null) return;
         const standardDays = safeNum(at.standardDays) || 26;
-        const days = tripDaysCount(trips.filter(t=>t.project===project));
+        const days = tripDaysCount(allowanceTripsFor(at, project, trips));
         const paidDays = Math.min(days, standardDays);
         const amount = Math.round(rate * paidDays / standardDays);
         if(amount>0){
@@ -940,6 +1056,7 @@ function calcPhuCap(driver, trips, period){
       // về dự án chính (driverMainProject) như perOccurrence ở trên.
       const rate = allowanceRateFor(at, mainProject);
       if(rate===null) return;
+      if(!allowanceTripsFor(at, mainProject, trips).length) return;
       const usage = state.allowanceUsage.find(u=>u.targetType==='driver' && u.targetId===driver.code
         && u.allowanceTypeId===at.id && u.period===period);
       const qty = usage ? safeNum(usage.quantity) : 0;
@@ -1141,8 +1258,32 @@ function filteredPayrollRows(period){
   return payrollRows(period)
     .filter(r=> !f.driver || r.driver.code===f.driver)
     .filter(r=> !f.project || r.projects.includes(f.project))
-    .filter(r=> !q || String(r.driver.code).toLowerCase().includes(q)
-      || String(r.driver.name||'').toLowerCase().includes(q));
+    .filter(r=> !q || Object.values(payrollSearchHit(r,q)).some(Boolean));
+}
+// Tìm "Tìm kiếm" (f-q) có khớp dòng lái xe này ở đâu — kể cả nội dung đang
+// ẩn bên trong từng khối chi tiết (Lương chuyến/Phụ cấp/Khấu trừ/Nhiên
+// liệu) chỉ hiện ra khi bấm mở từng dòng. Trả về cờ riêng từng khối để
+// renderPayrollRow biết khối nào cần TỰ XỔ RA cho khớp tìm kiếm thấy ngay,
+// không phải bấm mở tay — xem renderPayrollRow/renderPayrollSubrow.
+function payrollSearchHit(r, q){
+  const row = String(r.driver.code).toLowerCase().includes(q)
+    || String(r.driver.name||'').toLowerCase().includes(q)
+    || (r.plates||[]).some(p=>String(p).toLowerCase().includes(q));
+  const trips = r.trips.some(t=>{
+    const cust = customerByCode(t.project);
+    return String(t.project||'').toLowerCase().includes(q)
+      || (cust && String(cust.name||'').toLowerCase().includes(q))
+      || String(t.tripCode||'').toLowerCase().includes(q)
+      || String(t.route||'').toLowerCase().includes(q)
+      || String(t.origin||'').toLowerCase().includes(q)
+      || String(t.destination||'').toLowerCase().includes(q)
+      || String(t.plate||'').toLowerCase().includes(q);
+  });
+  const phucap = (r.phuCapLines||[]).some(l=>String(l.name||'').toLowerCase().includes(q));
+  const khautru = (r.deductionLines||[]).some(d=>String(d.type||'').toLowerCase().includes(q)
+    || String(d.reason||'').toLowerCase().includes(q));
+  const fuel = (r.fuelLines||[]).some(f=>String((f.vehicle||{}).plate||'').toLowerCase().includes(q));
+  return { row, trips, phucap, khautru, fuel };
 }
 
 /* =========================================================================
@@ -1327,7 +1468,7 @@ const SEED_DATA = {
     // vực khi nhập chuyến thường.
     NTF:{code:'NTF',name:'CÔNG TY CỔ PHẦN THỰC PHẨM DINH DƯỠNG NUTIFOOD VIỆT NAM',calcMethod:'km',
       surgeInnerAmount:250000, surgeOuterFlatAmount:300000, surgeOuterKmCap:200,
-      longHaulUpTo5:4000000, longHaulUpTo8:6000000, longHaulUpTo15:6800000,
+      longHaulUpTo5:4000000, longHaulUpTo8:6000000, longHaulUpTo15:6800000, longHaulFullDay:true,
       kmRegions:[{ zone:'outer', tiers:[5,10,15], brackets:[
         {kmMax:80,  rates:{0:1000000, 1:1200000, 2:1500000}},
         {kmMax:120, rates:{0:1500000, 1:1800000, 2:2200000}},
@@ -1335,9 +1476,9 @@ const SEED_DATA = {
         {kmMax:null, rates:{0:3500000, 1:4200000, 2:5000000}},
       ]}]},
     GS:{code:'GS',name:'CÔNG TY TNHH GREAT STAR VIỆT NAM',calcMethod:'fixed'},
-    SGW:{code:'SGW',name:'CHI NHÁNH CÔNG TY TNHH SG SAGAWA VIỆT NAM TẠI HÀ NỘI',calcMethod:'tripPlusExtras',loadingPrice:80000},
+    SGW:{code:'SGW',name:'CHI NHÁNH CÔNG TY TNHH SG SAGAWA VIỆT NAM TẠI HÀ NỘI',calcMethod:'tripPlusExtras'},
     SEWS:{code:'SEWS',name:'CÔNG TY TNHH SEWS-COMPONENTS VIỆT NAM',calcMethod:'fixed'},
-    BHX:{code:'BHX',name:'CÔNG TY CỔ PHẦN THƯƠNG MẠI BÁCH HÓA XANH',calcMethod:'tripPlusExtras',loadingPrice:70000},
+    BHX:{code:'BHX',name:'CÔNG TY CỔ PHẦN THƯƠNG MẠI BÁCH HÓA XANH',calcMethod:'tripPlusExtras'},
   },
   drivers: {
     LX01:{code:'LX01',name:'Nguyễn Văn Bình',phone:'0912345001',driverType:'Chính thức',status:'Đang làm việc',plate:'29H-111.11'},
@@ -1380,7 +1521,7 @@ const SEED_DATA = {
       rates:{GHN:100000,BEST:100000,NTF:100000,GS:100000,SGW:100000,SEWS:100000,BHX:100000}},
     at_cadem:{name:'Ca đêm', unit:'perOccurrence',
       rates:{GHN:60000,BEST:60000,NTF:60000,GS:60000,SGW:60000,SEWS:60000,BHX:60000}},
-    at_dienthoai:{name:'Phụ cấp điện thoại', unit:'perPeriodMinDays', minDays:15,
+    at_dienthoai:{name:'Phụ cấp điện thoại', unit:'perPeriodMinDays', minDays:15, onceOnly:true,
       rates:{GHN:100000,BEST:100000,NTF:100000,GS:100000,SGW:100000,SEWS:100000,BHX:100000}},
     at_tienan:{name:'Tiền ăn', unit:'perProratedMonth', standardDays:26,
       rates:{GS:1260000, SEWS:1000000}},
@@ -1411,13 +1552,13 @@ const SEED_DATA = {
     tr11:{date:'2026-09-05',tripCode:'CD11',driverCode:'LX04',plate:'30F-444.44',project:'GS',route:'',origin:'KCN Sóng Thần',destination:'Nội thành',isSurge:false,revenue:900000,status:'Hoàn thành'},
     tr12:{date:'2026-09-08',tripCode:'CD12',driverCode:'LX04',plate:'30F-444.44',project:'GS',route:'',origin:'KCN Sóng Thần',destination:'Nội thành',isSurge:false,revenue:900000,status:'Hoàn thành'},
 
-    tr13:{date:'2026-09-04',tripCode:'CD13',driverCode:'LX05',plate:'29C-555.55',project:'SGW',route:'Hà Nội – Vĩnh Phúc',origin:'Hà Nội',destination:'Vĩnh Phúc',isSurge:false,loadingCount:2,pointCount:5,revenue:1000000,status:'Hoàn thành'},
-    tr14:{date:'2026-09-09',tripCode:'CD14',driverCode:'LX05',plate:'29C-555.55',project:'SGW',route:'Hà Nội – Vĩnh Phúc',origin:'Hà Nội',destination:'Vĩnh Phúc',isSurge:false,loadingCount:1,pointCount:3,revenue:1000000,status:'Hoàn thành'},
+    tr13:{date:'2026-09-04',tripCode:'CD13',driverCode:'LX05',plate:'29C-555.55',project:'SGW',route:'Hà Nội – Vĩnh Phúc',origin:'Hà Nội',destination:'Vĩnh Phúc',isSurge:false,pointCount:5,revenue:1000000,status:'Hoàn thành'},
+    tr14:{date:'2026-09-09',tripCode:'CD14',driverCode:'LX05',plate:'29C-555.55',project:'SGW',route:'Hà Nội – Vĩnh Phúc',origin:'Hà Nội',destination:'Vĩnh Phúc',isSurge:false,pointCount:3,revenue:1000000,status:'Hoàn thành'},
 
     tr15:{date:'2026-09-02',tripCode:'CD15',driverCode:'LX06',plate:'30G-666.66',project:'SEWS',route:'',origin:'KCN Bắc Thăng Long',destination:'Nội thành',isSurge:false,revenue:850000,status:'Hoàn thành'},
 
-    tr16:{date:'2026-09-07',tripCode:'CD16',driverCode:'LX07',plate:'51H-777.77',project:'BHX',route:'TP.HCM – Long An',origin:'TP.HCM',destination:'Long An',isSurge:false,loadingCount:1,pointCount:8,revenue:1100000,status:'Hoàn thành'},
-    tr17:{date:'2026-09-10',tripCode:'CD17',driverCode:'LX07',plate:'51H-777.77',project:'BHX',route:'TP.HCM – Long An',origin:'TP.HCM',destination:'Long An',isSurge:false,loadingCount:2,pointCount:6,revenue:1100000,status:'Đang chạy'},
+    tr16:{date:'2026-09-07',tripCode:'CD16',driverCode:'LX07',plate:'51H-777.77',project:'BHX',route:'TP.HCM – Long An',origin:'TP.HCM',destination:'Long An',isSurge:false,pointCount:8,revenue:1100000,status:'Hoàn thành'},
+    tr17:{date:'2026-09-10',tripCode:'CD17',driverCode:'LX07',plate:'51H-777.77',project:'BHX',route:'TP.HCM – Long An',origin:'TP.HCM',destination:'Long An',isSurge:false,pointCount:6,revenue:1100000,status:'Đang chạy'},
   },
   deductions: {
     dd1:{date:'2026-08-25',driverCode:'LX02',type:'Tạm ứng',amount:2000000,reason:'Tạm ứng lương giữa kỳ'},
@@ -1626,7 +1767,7 @@ const SUPA_FIELD_MAP = {
   vehicles: { vehicleType:'vehicle_type',
     fuelManagement:'fuel_management', fuelNorm:'fuel_norm' },
   routes: { routeName:'route_name', surchargePrice:'surcharge_price' },
-  allowanceTypes: { minDays:'min_days', standardDays:'standard_days' },
+  allowanceTypes: { minDays:'min_days', standardDays:'standard_days', onceOnly:'once_only', platesByProject:'plates_by_project' },
   allowanceConfigs: { targetType:'target_type', targetId:'target_id', allowanceTypeId:'allowance_type_id' },
   allowanceUsage: { targetType:'target_type', targetId:'target_id', allowanceTypeId:'allowance_type_id' },
   trips: { tripCode:'trip_code', driverCode:'driver_code', kmRegion:'km_region', surgeZone:'surge_zone',
@@ -1835,7 +1976,7 @@ const SUPA_COLUMNS = {
   drivers: ['code','name','phone','driver_type','status','has_fixed_salary','fixed_salary_amount','seniority_allowance','plate'],
   vehicles: ['plate','capacity','vehicle_type','ownership','status','fuel_management','fuel_norm'],
   routes: ['project','route_name','route','price','surcharge_price'],
-  allowanceTypes: ['id','name','unit','min_days','standard_days','rates'],
+  allowanceTypes: ['id','name','unit','min_days','standard_days','once_only','rates','plates_by_project'],
   allowanceConfigs: ['id','target_type','target_id','allowance_type_id'],
   allowanceUsage: ['id','target_type','target_id','allowance_type_id','period','quantity'],
   trips: ['id','date','trip_code','driver_code','plate','project','route','origin','destination','km',
@@ -1845,7 +1986,7 @@ const SUPA_COLUMNS = {
   fuelPrices: ['id','period','price'],
   periodLocks: ['id','period','locked_at','locked_by','rows'],
 };
-const SUPA_JSONB_COLS = { customers:['km_regions'], allowanceTypes:['rates'], periodLocks:['rows'] };
+const SUPA_JSONB_COLS = { customers:['km_regions'], allowanceTypes:['rates','plates_by_project'], periodLocks:['rows'] };
 // Giá trị mặc định cho các cột NOT NULL DEFAULT ... trong supabase_setup.sql
 // — dữ liệu cũ nhập từ trước khi các trường này tồn tại trong app (vd
 // kmRegion/loadingCount thêm sau) sẽ không có field này, để undefined thì
@@ -2315,6 +2456,12 @@ function modalError(msg){
   if(!el){ toast(msg, 'danger'); return; }
   el.textContent = msg;
   el.hidden = false;
+  // Modal "Theo km" dài (Tăng cường + Phụ cấp đường dài + bảng bậc thang km)
+  // — ô lỗi luôn vẽ ở ĐẦU modal (ERROR_SLOT ngay dưới <h3>), nhưng bấm "Lưu"
+  // thường đứng ở CUỐI sau khi đã cuộn xuống sửa phần dưới, nên bấm xong
+  // tưởng không có phản ứng gì (lỗi hiện ngoài màn hình, phải tự cuộn lên
+  // mới thấy) — tự cuộn tới ô lỗi ngay khi hiện, không bắt người dùng tìm.
+  el.scrollIntoView({ block:'center', behavior:'smooth' });
 }
 // Cố ý KHÔNG đóng khi bấm ra ngoài modal (vùng overlay) — lỡ tay bấm ngoài
 // phạm vi ô đang nhập sẽ mất hết dữ liệu chưa lưu, phải gõ lại từ đầu. Chỉ
@@ -2728,7 +2875,7 @@ function renderPayroll(){
     <div class="filterbar">
       ${driverFilterField('f-driver', filters.payroll.driver)}
       <div class="field">${comboField('f-project', customerComboOptions('Khách hàng', projects), filters.payroll.project, 'Khách hàng')}</div>
-      <div class="field grow"><input type="text" id="f-q" placeholder="Mã hoặc tên lái xe…" value="${esc(filters.payroll.q)}"></div>
+      <div class="field grow"><input type="text" id="f-q" placeholder="Tìm kiếm…" value="${esc(filters.payroll.q)}"></div>
     </div>
 
     <div class="tablewrap">
@@ -2803,7 +2950,12 @@ function platePillHtml(plate, capacity){
 }
 function renderPayrollRow(r){
   const key = r.driver.code;
-  const open = expandedRows.has(key);
+  const q = filters.payroll.q.trim().toLowerCase();
+  // Đang tìm kiếm và dòng này khớp vì nội dung NẰM TRONG 1 khối chi tiết
+  // (chuyến/phụ cấp/khấu trừ/nhiên liệu) thì tự mở dòng + đúng khối đó ra
+  // luôn, không bắt bấm tay mới thấy — xem payrollSearchHit().
+  const hit = q ? payrollSearchHit(r, q) : null;
+  const open = (hit && (hit.trips||hit.phucap||hit.khautru||hit.fuel)) || expandedRows.has(key);
   // Xe THỰC CHẠY trong kỳ (theo chuyến; kỳ đã chốt lấy đúng bản lúc chốt) —
   // lái xe không có chuyến nào thì mới hiện xe đang gán (chữ mờ).
   const plateList = r.plateLabels || (r.plates||[]).map(p=>{ const v = vehicleByPlate(p); return { plate:p, capacity: v ? v.capacity : null }; });
@@ -2819,7 +2971,6 @@ function renderPayrollRow(r){
     const v = vehicleByPlate(plate);
     return v ? v.capacity : null;
   };
-  const plateListCell = plateList.length ? plateList.map(v=>platePillHtml(v.plate, v.capacity)).join('<br>') : '<span class="muted">—</span>';
   const out = [`
     <tr class="${r.warnings.length?'row-warn':''}">
       <td>${payrollStatusToggle(key, r.warnings, open)}</td>
@@ -2844,10 +2995,10 @@ function renderPayrollRow(r){
           r.coDinhInfo.actual, ()=>`
           <table><thead><tr><th>Khoản</th><th class="nowrap">Biển kiểm soát</th><th>Chi tiết</th><th class="num">Thành tiền</th></tr></thead>
           <tbody>
-            ${r.coDinhInfo.total ? `<tr><td>Lương cứng theo ngày công</td>
-              <td class="nowrap">${plateListCell}</td>
-              <td>${r.coDinhInfo.workDays}/${r.coDinhInfo.standardDays} ngày × (${fmtMoney(r.coDinhInfo.total)} đ / ${r.coDinhInfo.standardDays} ngày)</td>
-              <td class="num">${fmtMoney(r.coDinhInfo.base)}</td></tr>` : ''}
+            ${r.coDinhInfo.total && r.coDinhInfo.workDayLines.length ? r.coDinhInfo.workDayLines.map(l=>`<tr${l.paid?'':' class="muted"'}><td>Lương cứng theo ngày công${l.paid?'':' <span class="badge neutral">Vượt công chuẩn</span>'}</td>
+              <td class="nowrap">${platePillHtml(l.plate, l.capacity)}</td>
+              <td>${fmtDate(l.date)}</td>
+              <td class="num">${fmtMoney(l.amount)}</td></tr>`).join('') : ''}
             ${r.coDinhInfo.ntfDayLines.length ? r.coDinhInfo.ntfDayLines.map(l=>`<tr><td>Phụ cấp đường dài theo ngày (${esc(l.project||'NTF')})</td>
               <td class="nowrap">${platePillHtml(l.plate, l.capacity)}</td>
               <td>${fmtDate(l.date)}</td>
@@ -2856,22 +3007,28 @@ function renderPayrollRow(r){
               <td class="nowrap">${platePillHtml(l.plate, l.capacity)}</td>
               <td>${fmtDate(l.date)}</td>
               <td class="num">${fmtMoney(l.amount)}</td></tr>`).join('') : ''}
-            ${!r.coDinhInfo.total && !r.coDinhInfo.ntfDayLines.length && !r.coDinhInfo.standbyLines.length ? '<tr><td colspan="4" class="muted">Không có</td></tr>' : ''}
+            ${!r.coDinhInfo.workDayLines.length && !r.coDinhInfo.ntfDayLines.length && !r.coDinhInfo.standbyLines.length ? '<tr><td colspan="4" class="muted">Không có</td></tr>' : ''}
           </tbody></table>
-          ${r.coDinhInfo.ntfDayLines.length || r.coDinhInfo.standbyLines.length?'<div class="hint">Phụ cấp đường dài/Lương trực làm tròn 1 lần trên tổng — cộng từng dòng trên có thể lệch vài đồng so với tổng thực tế.</div>':''}`)}
-        ${renderPayrollSubrow(key, 'trips', 'Lương chuyến', `${r.trips.length} chuyến${r.cancelled?` (+${r.cancelled} huỷ)`:''}`, r.chuyen+r.tangCuong, ()=>`
-          <table><thead><tr><th>Ngày</th><th class="nowrap">Biển kiểm soát</th><th>Khách hàng — Chi tiết</th><th>Loại</th><th class="num">Đơn giá</th></tr></thead>
-          <tbody>${r.trips.length ? r.trips.map(t=>{
-            const price = t._price!==undefined ? t._price : tripUnitPrice(t);
-            return `<tr><td class="nowrap">${fmtDate(t.date)}</td><td class="nowrap">${platePillHtml(t.plate, capacityOfPlate(t.plate))}</td><td>${t._label!==undefined ? t._label : tripCustomerLabel(t, true)}${tripPointNoteHtml(t)}</td>
+          ${r.coDinhInfo.workDayLines.length || r.coDinhInfo.ntfDayLines.length || r.coDinhInfo.standbyLines.length?'<div class="hint">Đơn giá/ngày ở trên chỉ mang tính tham khảo (làm tròn riêng từng dòng) — số tiền THẬT lấy ở tổng "Lương cố định" đã làm tròn 1 lần, cộng từng dòng có thể lệch vài đồng so với tổng thực tế. Ngày "Vượt công chuẩn" là ngày có đi làm nhưng đã đủ số ngày công tối đa được trả (${r.coDinhInfo.standardDays} ngày) nên không tính thêm tiền.</div>':''}`)}
+        ${renderPayrollSubrow(key, 'trips', 'Lương chuyến', `${r.trips.length} chuyến${r.cancelled?` (+${r.cancelled} huỷ)`:''}`, r.chuyen+r.tangCuong, ()=>{
+          // Chuyến đơn giá đúng 0đ (Trả hàng/Trực/Trả điểm/Nghỉ…) không hiện
+          // dòng ở đây nữa — không có ý nghĩa tiền, chỉ gây rối mắt. Chuyến
+          // THIẾU giá (price===null) vẫn hiện để còn thấy cảnh báo cần bổ sung.
+          const priced = r.trips
+            .map(t=>({ t, price: t._price!==undefined ? t._price : tripUnitPrice(t) }))
+            .filter(x=>x.price!==0);
+          return `<table><thead><tr><th>Ngày</th><th class="nowrap">Biển kiểm soát</th><th>Khách hàng — Chi tiết</th><th>Loại</th><th class="num">Đơn giá</th></tr></thead>
+          <tbody>${priced.length ? priced.map(({t,price})=>
+            `<tr><td class="nowrap">${fmtDate(t.date)}</td><td class="nowrap">${platePillHtml(t.plate, capacityOfPlate(t.plate))}</td><td>${t._label!==undefined ? t._label : tripCustomerLabel(t, true)}${tripPointNoteHtml(t)}</td>
               <td>${tripTypeBadge(t)}</td>
-              <td class="num">${price===null?'<span class="badge warn">Thiếu giá</span>':fmtMoney(price)}</td></tr>`;
-          }).join('') : '<tr><td colspan="5" class="muted">Không có chuyến</td></tr>'}</tbody></table>`)}
+              <td class="num">${price===null?'<span class="badge warn">Thiếu giá</span>':fmtMoney(price)}</td></tr>`
+          ).join('') : '<tr><td colspan="5" class="muted">Không có chuyến</td></tr>'}</tbody></table>`;
+        }, hit && hit.trips)}
         ${renderPayrollSubrow(key, 'phucap', 'Phụ cấp', `${r.phuCapLines.length} khoản`, r.phuCap, ()=>`
           <table><thead><tr><th>Loại</th><th class="num">SL</th><th class="num">Đơn giá</th><th class="num">Thành tiền</th></tr></thead>
           <tbody>${r.phuCapLines.length ? r.phuCapLines.map(l=>`<tr><td>${esc(l.name)}</td>
             <td class="num">${l.qty}</td><td class="num">${fmtMoney(l.rate)}</td><td class="num">${fmtMoney(l.amount)}</td></tr>`).join('')
-            : '<tr><td colspan="4" class="muted">Không có</td></tr>'}</tbody></table>`)}
+            : '<tr><td colspan="4" class="muted">Không có</td></tr>'}</tbody></table>`, hit && hit.phucap)}
         ${renderPayrollSubrow(key, 'fuel', 'Thưởng/phạt nhiên liệu', 'Xe khoán dầu', r.thuong, ()=>`
           <table><thead><tr><th>Xe</th><th class="num">Tổng km</th><th class="num">Định mức</th><th class="num">Thực tế</th><th class="num">Tiết kiệm</th><th class="num">Thành tiền</th></tr></thead>
           <tbody>${r.fuelLines.length ? r.fuelLines.map(f=> f.missing
@@ -2879,12 +3036,12 @@ function renderPayrollRow(r){
             : `<tr><td>${esc(f.vehicle.plate)}</td><td class="num">${fmtMoney(f.totalKm)}</td>
                 <td class="num">${fmtMoney(f.normFuel)} lít</td><td class="num">${fmtMoney(f.actualFuel)} lít</td>
                 <td class="num">${fmtMoney(f.savedFuel)} lít</td><td class="num">${fmtMoney(f.amount)}</td></tr>`
-          ).join('') : '<tr><td colspan="6" class="muted">Xe không khoán dầu</td></tr>'}</tbody></table>`)}
+          ).join('') : '<tr><td colspan="6" class="muted">Xe không khoán dầu</td></tr>'}</tbody></table>`, hit && hit.fuel)}
         ${renderPayrollSubrow(key, 'khautru', 'Khấu trừ', `${r.deductionLines.length} khoản`, -r.khauTru, ()=>`
           <table><thead><tr><th>Ngày</th><th>Loại</th><th>Lý do</th><th class="num">Số tiền</th></tr></thead>
           <tbody>${r.deductionLines.length ? r.deductionLines.map(d=>`<tr><td>${fmtDate(d.date)}</td><td>${esc(d.type)}</td>
             <td>${esc(d.reason||'')}</td><td class="num">${fmtMoney(d.amount)}</td></tr>`).join('')
-            : '<tr><td colspan="4" class="muted">Không có</td></tr>'}</tbody></table>`)}
+            : '<tr><td colspan="4" class="muted">Không có</td></tr>'}</tbody></table>`, hit && hit.khautru)}
       </div>
       ${r.warnings.length?`<div class="hint"><span class="warn">⚠ ${r.warnings.map(esc).join(' · ')}</span></div>`:''}
     </td></tr>`);
@@ -2896,10 +3053,10 @@ function renderPayrollRow(r){
 // Khoản nào bằng 0đ thì ẩn hẳn dòng (không hiện "0 đ" vô nghĩa) — đỡ rối mắt
 // với lái xe hưởng lương cứng (VD GS/SEWS: Lương chuyến/Tăng cường/Khấu trừ
 // thường 0 vì khách trả thẳng lương cứng, chỉ Lương cố định + Phụ cấp có số).
-function renderPayrollSubrow(driverKey, sub, label, meta, amount, detailFn){
+function renderPayrollSubrow(driverKey, sub, label, meta, amount, detailFn, forceOpen){
   if(amount===0) return '';
   const subKey = `${driverKey}|${sub}`;
-  const open = expandedRows.has(subKey);
+  const open = forceOpen || expandedRows.has(subKey);
   const amountCls = amount<0 ? ' class="danger"' : '';
   let html = `<div class="subrow" data-toggle="${esc(subKey)}">
     <button class="linkbtn subrow-toggle" title="Xem chi tiết">${open?'▾':'▸'}</button>
@@ -3094,12 +3251,161 @@ function tripFacetCodes(){
   if(projectCodes && f.project && !projectCodes.includes(f.project)) projectCodes = [...projectCodes, f.project];
   return { driverCodes, projectCodes };
 }
-function renderTrips(){
-  const f = filters.trips, q = f.q.trim().toLowerCase();
-  const { driverCodes, projectCodes } = tripFacetCodes();
+// "Lương cố định" ở Lịch lái xe — không phải trường riêng trên chuyến, mà
+// hiện ĐÚNG số tiền Lương cố định của riêng NGÀY đó (không phải đơn giá bình
+// quân) — lấy thẳng từ đúng dòng ngày đó trong workDayLines/ntfDayLines/
+// standbyLines do calcLuongCoDinh() tính cho driver+kỳ của chuyến này, rồi
+// cộng lại nếu ngày đó khớp nhiều hơn 1 danh sách (VD vừa là ngày công
+// thường vừa có thêm Lương trực). Cộng hết các dòng của 1 kỳ sẽ RA ĐÚNG số
+// "Lương cố định" hiển thị ở Bảng lương cho driver đó, không lệch đồng nào
+// (ngày vượt công chuẩn hiện 0đ đúng như cách Bảng lương không tính thêm
+// ngày đó; ngày chạy trọn khách có Phụ cấp đường dài theo ngày thay thế
+// Lương cố định cũng lấy đúng số đã quy đổi, không phải đơn giá bình quân).
+// Phụ cấp đường dài theo ngày/Lương trực áp dụng cho MỌI lái xe (không riêng
+// gì lái xe có bật Lương cứng — xem calcLuongCoDinh: ntfDayAmount/
+// standbyAmount tính độc lập, không phụ thuộc driver.hasFixedSalary), nên
+// KHÔNG được chặn sớm theo hasFixedSalary ở đây (bản trước làm vậy là SAI —
+// khiến lái xe thường chạy trọn NTF/KL hoặc có chuyến Trực bị hiện "—" nhầm
+// dù đúng ra có số). Ngày không khớp khoản nào ở cả 3 danh sách mới hiện "—".
+// Riêng loại "Trả điểm" (point) luôn hiện "—" ở ĐÚNG dòng đó, dù ngày của nó
+// có khớp khoản nào — "Trả điểm" chỉ là dòng phụ ghi thêm 1 điểm giao của
+// dòng "Chuyến"/"Trả hàng" chính cùng ngày/xe/khách (xác nhận với người dùng
+// ngày 2026-10-24), số tiền ngày đó đã hiện đủ ở dòng chính rồi — không mất
+// tiền ở tổng cuối bảng vì totalBase khử trùng theo (lái xe+ngày), không
+// theo dòng (xem seenBase ở renderTrips).
+// "cache" (object {} tạo mới mỗi lần renderTrips() vẽ bảng) để chỉ tính
+// calcLuongCoDinh 1 LẦN cho mỗi driver+kỳ, không tính lại cho từng dòng
+// chuyến (tránh tính lại hàng trăm lần khi 1 lái xe có nhiều chuyến/kỳ).
+function tripFixedSalaryAmount(trip, cache){
+  if(isOffTrip(trip)) return null;
+  if(tripTypeOf(trip)==='point') return null;
+  const driver = driverByCode(trip.driverCode);
+  if(!driver) return null;
+  const period = getPeriod(trip.date);
+  const key = trip.driverCode+'|'+period;
+  let info = cache[key];
+  if(!info){
+    const periodTrips = state.trips.filter(x=>x.driverCode===trip.driverCode && getPeriod(x.date)===period && x.status!==TRIP_CANCELLED);
+    info = cache[key] = calcLuongCoDinh(trip.driverCode, periodTrips);
+  }
+  let amount = 0, any = false;
+  // workDayLines có 1 dòng cho MỌI ngày công (kể cả driver không bật Lương
+  // cứng, lúc đó amount luôn =0) — chỉ lấy dòng này khi driver CÓ Lương
+  // cứng, tránh hiện "0đ" tràn lan ở toàn bộ lái xe thường không liên quan
+  // khoản này. ntfDayLines/standbyLines ngược lại CHỈ chứa ngày thực sự có
+  // tiền (đã filter amount>0 từ gốc, xem calcLuongCoDinh) nên luôn lấy, bất
+  // kể driver có Lương cứng hay không — đúng như Bảng lương đang cộng.
+  if(driver.hasFixedSalary){
+    const wd = info.workDayLines.find(l=>l.date===trip.date);
+    if(wd){ amount += wd.amount; any = true; }
+  }
+  const ntf = info.ntfDayLines.find(l=>l.date===trip.date);
+  if(ntf){ amount += ntf.amount; any = true; }
+  const sb = info.standbyLines.find(l=>l.date===trip.date);
+  if(sb){ amount += sb.amount; any = true; }
+  return any ? amount : null;
+}
+// "Tiền ăn" ở Lịch lái xe — không phải trường riêng trên chuyến, mà hiện
+// tiền của MỌI loại phụ cấp có TÊN chứa chữ "ăn" (không phân biệt hoa/
+// thường — VD "Ăn ca", "Tiền ăn ca đêm", "Phụ cấp ăn NTF", "Tiền ăn" khách
+// SEWS/GS…) áp dụng cho đúng khách hàng + chuyến đó, gồm 3 cách tính khác
+// nhau đang có trong hệ thống (xác nhận với người dùng ngày 2026-10-24: hễ
+// TÊN có chữ "ăn" là phải hiện ở đây, không phụ thuộc đơn vị tính):
+//  - unit='perDay' ("Theo ngày công"): 1 đơn giá CỐ ĐỊNH/ngày, giống nhau ở
+//    mọi chuyến cùng ngày (xem calcPhuCap đoạn unit==='perDay').
+//  - unit='perTripByKmCapacity' ("mỗi chuyến theo km × tải trọng xe" — VD
+//    đúng "Phụ cấp ăn NTF"): tính RIÊNG cho từng chuyến theo số km + tải
+//    trọng xe của chuyến đó (xem tripAllowanceByKmCapacity), KHÔNG giống
+//    nhau giữa các chuyến cùng ngày — chỉ áp dụng chuyến Loại "Chuyến".
+//  - unit='perProratedMonth' ("tỷ lệ ngày công / công chuẩn" — VD "Tiền ăn"
+//    khách SEWS/GS): mức cấu hình là mức quy đổi theo THÁNG để chia theo tỷ
+//    lệ ngày công thực tế/công chuẩn (xem calcPhuCap đoạn unit==='perProratedMonth'),
+//    ở đây chỉ hiện đơn giá/ngày THAM KHẢO = mức tháng / số ngày công chuẩn
+//    (không nhân theo ngày công thực tế, giống cách "Lương cố định" hiện
+//    đơn giá/ngày tham khảo ở workDayLines) — số tiền THẬT lấy ở Bảng lương.
+// Loại phụ cấp tên không liên quan ăn uống (VD "Lưu trú") thì KHÔNG cộng
+// vào đây dù cùng 1 trong 3 đơn vị trên — vẫn tính đúng bình thường ở Bảng
+// lương › Phụ cấp. Trả về 2 phần riêng (dayAmount/tripAmount) vì tổng dưới
+// bảng (renderTrips) cần khử trùng theo ngày CHỈ với phần perDay/
+// perProratedMonth — phần perTripByKmCapacity vốn đã riêng theo từng chuyến,
+// cộng thẳng không trùng.
+function tripMealAllowanceParts(trip){
+  if(isOffTrip(trip)) return { dayAmount:null, tripAmount:0, any:false };
+  let dayAmount = null, tripAmount = 0, any = false;
+  state.allowanceTypes.forEach(at=>{
+    if(!String(at.name||'').toLowerCase().includes('ăn')) return;
+    if(at.unit==='perDay'){
+      const rate = allowanceRateFor(at, trip.project);
+      if(rate!=null && allowanceAppliesToPlate(at, trip.project, trip.plate)){ dayAmount = (dayAmount||0) + rate; any = true; }
+    }else if(at.unit==='perTripByKmCapacity'){
+      const amt = tripAllowanceByKmCapacity(at, trip);
+      if(amt>0){ tripAmount += amt; any = true; }
+    }else if(at.unit==='perProratedMonth'){
+      // Mức cấu hình là mức quy đổi theo THÁNG để chia tỷ lệ ngày công/công
+      // chuẩn (xem calcPhuCap) — ở đây chỉ hiện đơn giá/ngày THAM KHẢO (mức
+      // tháng / số ngày công chuẩn), giống cách "Lương cố định" hiện đơn
+      // giá/ngày tham khảo (workDayLines). Số tiền THẬT (theo tỷ lệ ngày
+      // công thực tế / công chuẩn) vẫn tính đúng ở Bảng lương › Phụ cấp.
+      const rate = allowanceRateFor(at, trip.project);
+      if(rate!=null && allowanceAppliesToPlate(at, trip.project, trip.plate)){
+        const standardDays = safeNum(at.standardDays) || 26;
+        dayAmount = (dayAmount||0) + Math.round(rate/standardDays); any = true;
+      }
+    }
+  });
+  return { dayAmount, tripAmount, any };
+}
+// Số hiện trong cột "Tiền ăn" của 1 dòng chuyến — tổng cả 2 phần trên. Chỉ
+// mang tính tham khảo (phần perDay không nhân theo số chuyến/ngày); số tiền
+// THẬT đã tính đúng ở Bảng lương › Phụ cấp.
+function tripDailyAllowanceRate(trip){
+  const { dayAmount, tripAmount, any } = tripMealAllowanceParts(trip);
+  return any ? (dayAmount||0) + tripAmount : null;
+}
+// Lọc theo từng cột ở Lịch lái xe (biểu tượng phễu trên tiêu đề — bấm mới xổ
+// ra danh sách giá trị UNIQUE để tick chọn, giống Excel). Cột Lái xe/Khách
+// hàng đã có sẵn ô lọc riêng ở filterbar (combo chọn theo mã) nên không
+// thêm phễu nữa, tránh 2 cơ chế trùng nhau.
+const TRIP_TEXT_COL_KEYS = ['date','plate','detail','place','types'];
+const TRIP_MONEY_COL_KEYS = ['base','price','meal'];
+// Giá trị dùng để NHÓM UNIQUE + so khớp lọc của 1 chuyến, theo đúng cột
+// "key" (chỉ áp dụng cho 5 cột không phải tiền — 3 cột tiền tính riêng ở
+// tripColOptions() vì cần baseRate/price/mealRate đã tính qua rowsData).
+function tripColRawValue(t, key){
+  switch(key){
+    case 'date': return t.date || '';
+    case 'plate': return t.plate || '';
+    case 'detail': {
+      const cust = customerByCode(t.project);
+      return t.project + (cust && cust.name ? ' — ' + cust.name : '');
+    }
+    case 'place': {
+      if(t.origin && t.destination) return `${t.origin} → ${t.destination}`;
+      return t.route || '';
+    }
+    case 'types': {
+      const ty = TRIP_TYPES.find(x=>x.v===tripTypeOf(t));
+      return ty ? ty.l : tripTypeOf(t);
+    }
+    default: return '';
+  }
+}
+function tripColDisplayLabel(key, val){
+  if(val==='' || val==null) return '(Trống)';
+  if(key==='date') return fmtDate(val);
+  return val;
+}
+function tripColFilterActive(col, key){ return (col[key]||[]).length>0; }
+// Áp mọi lọc cột DẠNG DANH SÁCH GIÁ TRỊ (5 cột không phải tiền) trừ đúng
+// "excludeKey" — dùng để liệt kê giá trị UNIQUE còn lại cho 1 cột đang mở,
+// giống Excel: mở cột A vẫn thấy đủ giá trị của A tương ứng với các cột
+// khác đã lọc, không bị tự giới hạn bởi chính lọc của cột A. excludeKey=null
+// nghĩa là áp dụng TẤT CẢ (dùng khi lọc danh sách chuyến thật để vẽ bảng).
+function tripsFilteredExcept(excludeKey){
+  const f = filters.trips, q = f.q.trim().toLowerCase(), col = f.col;
   const focus = f.focus || null;
   const focusIds = focus ? new Set(focus.ids) : null;
-  const list = state.trips.filter(t=>{
+  return state.trips.filter(t=>{
     if(focusIds) return focusIds.has(t.id);
     if(!periodScopeAll && getPeriod(t.date)!==appPeriod) return false;
     if(f.driver && t.driverCode!==f.driver) return false;
@@ -3107,8 +3413,114 @@ function renderTrips(){
     if(q && !String(t.tripCode||'').toLowerCase().includes(q)
         && !String(t.driverCode).toLowerCase().includes(q)
         && !String(t.plate).toLowerCase().includes(q)) return false;
+    for(const k of TRIP_TEXT_COL_KEYS){
+      if(k===excludeKey) continue;
+      const excluded = col[k];
+      if(excluded.length && excluded.includes(tripColRawValue(t,k))) return false;
+    }
     return true;
-  }).sort(byDateDesc);
+  });
+}
+// Tính trước baseRate/price/mealRate cho 1 danh sách chuyến — dùng chung
+// cho cả vẽ bảng và liệt kê giá trị unique của 3 cột tiền.
+function computeTripRows(trips){
+  const coDinhCache = {};
+  return trips.map(t=>{
+    const isPointRow = tripTypeOf(t)==='point';
+    const price = isPointRow ? tripPointDropAmount(t) : tripUnitPrice(t);
+    const baseRate = tripFixedSalaryAmount(t, coDinhCache);
+    const meal = tripMealAllowanceParts(t);
+    // mealRate: tổng hiện ở cột "Tiền ăn" trên dòng này — mealDayAmount/
+    // mealTripAmount tách riêng để cộng tổng cuối bảng đúng (xem renderTrips).
+    const mealRate = meal.any ? (meal.dayAmount||0) + meal.tripAmount : null;
+    return { t, isPointRow, price, baseRate, mealRate,
+      mealDayAmount: meal.dayAmount, mealTripAmount: meal.tripAmount,
+      cancelled: t.status===TRIP_CANCELLED };
+  });
+}
+const TRIP_MONEY_COL_FIELD = { base:'baseRate', price:'price', meal:'mealRate' };
+// Áp lọc 3 cột tiền (dạng danh sách giá trị, y hệt 5 cột trên) trừ đúng
+// "excludeKey" lên 1 danh sách rowsData đã tính sẵn.
+function applyMoneyColFilters(rows, excludeKey){
+  const col = filters.trips.col;
+  return rows.filter(r=>{
+    for(const k of TRIP_MONEY_COL_KEYS){
+      if(k===excludeKey) continue;
+      const excluded = col[k];
+      if(!excluded.length) continue;
+      const val = r[TRIP_MONEY_COL_FIELD[k]];
+      const label = val==null ? '' : String(val);
+      if(excluded.includes(label)) return false;
+    }
+    return true;
+  });
+}
+// Danh sách giá trị UNIQUE (kèm số lượng chuyến) để hiện trong panel lọc
+// của đúng 1 cột — loại trừ chính lọc của cột đó (xem tripsFilteredExcept).
+function tripColOptions(key){
+  const col = filters.trips.col;
+  if(TRIP_MONEY_COL_KEYS.includes(key)){
+    const rows = applyMoneyColFilters(computeTripRows(tripsFilteredExcept(null)), key);
+    const field = TRIP_MONEY_COL_FIELD[key];
+    const map = new Map();
+    rows.forEach(r=>{
+      const val = r[field];
+      const value = val==null ? '' : String(val);
+      if(!map.has(value)) map.set(value, { value, sortVal: val==null?-Infinity:val, count:0 });
+      map.get(value).count++;
+    });
+    return [...map.values()].sort((a,b)=>a.sortVal-b.sortVal)
+      .map(o=>({ value:o.value, label: o.value===''?'(Trống)':fmtMoney(safeNum(o.value))+' đ', count:o.count }));
+  }
+  const trips = tripsFilteredExcept(key);
+  const map = new Map();
+  trips.forEach(t=>{
+    const value = tripColRawValue(t, key);
+    if(!map.has(value)) map.set(value, { value, count:0 });
+    map.get(value).count++;
+  });
+  return [...map.values()].sort((a,b)=>String(a.value).localeCompare(String(b.value), 'vi'))
+    .map(o=>({ value:o.value, label: tripColDisplayLabel(key, o.value), count:o.count }));
+}
+// Icon phễu lọc — vẽ thẳng SVG tại đây (không gọi hàm icon() của khối "giao
+// diện mới" ở cuối file vì hàm đó nằm trong 1 closure riêng, không gọi được
+// từ đây).
+const TH_FILTER_ICON = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>';
+function thFilter(label, key, thClass){
+  const active = tripColFilterActive(filters.trips.col, key);
+  return `<th${thClass?` class="${thClass}"`:''}><span class="th-label">${esc(label)}</span>
+    <button type="button" class="th-filter-btn${active?' active':''}" data-colf="${key}" title="Lọc theo ${esc(label)}">${TH_FILTER_ICON}</button></th>`;
+}
+// Panel lọc kiểu Excel: ô tìm trong danh sách (chỉ ẩn/hiện ngay trên DOM,
+// KHÔNG đụng tới lựa chọn đang tick) + "Chọn tất cả" (tri-state, chỉ tác
+// động các dòng ĐANG HIỆN theo ô tìm) + danh sách giá trị unique cuộn riêng
+// + OK (mới áp dụng vào bộ lọc thật) / Huỷ (đóng, không áp dụng gì) — xem
+// bindColFilterPanel() ở bindTrips() để biết cách giữ "bản nháp" tick chọn
+// tới khi bấm OK.
+function colFilterPanelHtml(key){
+  const col = filters.trips.col;
+  const excluded = col[key];
+  const options = tripColOptions(key);
+  const isChecked = v => !excluded.includes(v);
+  return `<input type="text" class="cf-search-input" placeholder="Tìm trong danh sách…">
+    <label class="cf-check cf-all-row"><input type="checkbox" class="cf-all"${excluded.length===0?' checked':''}> <b>Chọn tất cả</b></label>
+    <div class="cf-list">${options.length ? options.map(o=>`<label class="cf-check" data-cf-text="${esc(String(o.label).toLowerCase())}">
+        <input type="checkbox" class="cf-val" value="${esc(o.value)}"${isChecked(o.value)?' checked':''}> <span class="cf-check-label">${esc(o.label)}</span> <span class="cf-count muted">(${o.count})</span></label>`).join('')
+      : '<div class="muted" style="padding:4px 2px;">Không có dữ liệu để lọc</div>'}</div>
+    <div class="cf-actions"><button type="button" class="btn sm primary" data-cf-ok>OK</button><button type="button" class="btn sm" data-cf-cancel>Huỷ</button></div>`;
+}
+function renderTrips(){
+  const f = filters.trips;
+  const { driverCodes, projectCodes } = tripFacetCodes();
+  const focus = f.focus || null;
+  const preList = tripsFilteredExcept(null).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+
+  // Tính trước 1 lần cho MỖI chuyến còn lại sau các bộ lọc trên — dùng chung
+  // cho cả lọc theo giá trị unique của 3 cột tiền (chỉ tính được SAU khi đã
+  // có baseRate/price/mealRate), vẽ từng dòng, và cộng tổng dưới bảng.
+  const rowsDataAll = computeTripRows(preList);
+  const rowsData = applyMoneyColFilters(rowsDataAll, null);
+  const list = rowsData.map(r=>r.t);
   // Chỉ giữ lại tick chọn cho những chuyến vẫn đang hiện trong danh sách đã
   // lọc — đổi bộ lọc/xoá chuyến ở nơi khác thì tự bỏ tick chuyến không còn
   // thấy nữa, tránh xoá nhầm chuyến đang bị ẩn bởi bộ lọc hiện tại.
@@ -3116,11 +3528,30 @@ function renderTrips(){
   [...selectedTripIds].forEach(id=>{ if(!listIds.has(id)) selectedTripIds.delete(id); });
   const allSelected = list.length>0 && list.every(t=>selectedTripIds.has(t.id));
 
+  // Tổng dưới bảng: "Lương chuyến" cộng thẳng (mỗi dòng 1 số tiền riêng,
+  // không lặp). "Lương cố định" phải khử trùng theo (lái xe+ngày) trước khi
+  // cộng vì hiện CÙNG 1 số tiền lặp lại trên mọi chuyến cùng ngày. "Tiền ăn"
+  // có 2 phần khác nhau (xem tripMealAllowanceParts/computeTripRows):
+  // mealDayAmount (perDay, lặp lại theo ngày+khách hàng — PHẢI khử trùng
+  // như trên) và mealTripAmount (perTripByKmCapacity — riêng theo TỪNG
+  // chuyến, cộng thẳng không khử trùng).
+  const seenBase = new Set(), seenMeal = new Set();
+  let totalBase = 0, totalMeal = 0, totalPrice = 0;
+  rowsData.forEach(({t, price, baseRate, mealDayAmount, mealTripAmount})=>{
+    totalPrice += price || 0;
+    const baseKey = t.driverCode+'|'+t.date;
+    if(baseRate!=null && !seenBase.has(baseKey)){ seenBase.add(baseKey); totalBase += baseRate; }
+    const mealKey = t.driverCode+'|'+t.date+'|'+t.project;
+    if(mealDayAmount!=null && !seenMeal.has(mealKey)){ seenMeal.add(mealKey); totalMeal += mealDayAmount; }
+    totalMeal += mealTripAmount || 0;
+  });
+
   return `
     <div class="pagehead">
       <div><h1>Lịch lái xe</h1><p>Ghi nhận từng chuyến xe chạy hằng ngày — nguồn dữ liệu chính để tính lương lái xe.</p></div>
       <div class="actions">${importButtons('trip')}
-        <button class="btn danger" data-act="bulk-delete"${selectedTripIds.size?'':' hidden'}>Xoá đã chọn${selectedTripIds.size?` (${selectedTripIds.size})`:''}</button>
+        <button class="btn" data-act="toggle-bulk-delete">${tripBulkDeleteRequested?'Huỷ yêu cầu xoá':'Yêu cầu xoá'}</button>
+        ${tripBulkDeleteRequested?`<button class="btn danger" data-act="bulk-delete"${selectedTripIds.size?'':' hidden'}>Xoá đã chọn${selectedTripIds.size?` (${selectedTripIds.size})`:''}</button>`:''}
         <button class="btn primary" data-act="add">+ Thêm chuyến</button></div>
     </div>
     ${focus ? `<div class="focusbar"><span><b>Đang lọc theo cảnh báo:</b> ${esc(focus.label)} — hiện ${list.length} chuyến để so sánh (không theo kỳ/bộ lọc bên dưới).</span>
@@ -3131,23 +3562,30 @@ function renderTrips(){
       <div class="field grow"><input type="text" id="f-q" placeholder="Mã chuyến / lái xe / biển số…" value="${esc(f.q)}"></div>
     </div>
     <div class="tablewrap"><table>
-      <thead><tr><th style="width:32px;"><input type="checkbox" id="trip-select-all"${allSelected?' checked':''}></th><th>Ngày</th><th class="nowrap">Lái xe</th><th>Biển số</th><th>Khách hàng — Chi tiết</th>
-        <th>Điểm đi → đến</th><th>Loại</th><th class="num">Đơn giá</th><th></th></tr></thead>
-      <tbody>${list.map(t=>{
-        const price = tripUnitPrice(t);
-        const cancelled = t.status===TRIP_CANCELLED;
-        return `<tr class="${price===null?'row-warn':''}${cancelled?' row-muted':''}">
-          <td><input type="checkbox" class="trip-select" data-id="${t.id}"${selectedTripIds.has(t.id)?' checked':''}></td>
+      <thead><tr>${tripBulkDeleteRequested?`<th style="width:32px;"><input type="checkbox" id="trip-select-all"${allSelected?' checked':''}></th>`:''}${thFilter('Ngày','date')}<th class="nowrap">Lái xe</th>${thFilter('Biển số','plate')}${thFilter('Khách hàng — Chi tiết','detail')}
+        ${thFilter('Điểm đi → đến','place')}${thFilter('Loại','types')}${thFilter('Lương cố định','base','num')}${thFilter('Lương chuyến','price','num')}${thFilter('Tiền ăn','meal','num')}<th></th></tr></thead>
+      <tbody>${rowsData.map(({t, isPointRow, price, baseRate, mealRate, cancelled})=>`<tr class="trip-row ${price===null?'row-warn':''}${cancelled?' row-muted':''}" data-row-id="${esc(t.id)}">
+          ${tripBulkDeleteRequested?`<td><input type="checkbox" class="trip-select" data-id="${t.id}"${selectedTripIds.has(t.id)?' checked':''}></td>`:''}
           <td>${fmtDate(t.date)}</td>
           <td class="nowrap">${esc((driverByCode(t.driverCode)||{}).name || t.driverCode)}${driverByCode(t.driverCode)?'':' <span class="badge warn">?</span>'}</td>
           <td>${esc(t.plate)}${vehicleByPlate(t.plate)?'':' <span class="badge warn">?</span>'}</td>
           <td>${tripCustomerLabel(t)}</td>
           <td class="muted">${tripOriginDestLabel(t)}${tripPointNoteHtml(t, true)}</td>
           <td>${tripTypeBadge(t)}</td>
-          <td class="num nowrap">${price===null?'<span class="badge warn">Thiếu giá</span>':fmtMoney(price)}</td>
-          <td>${isPeriodLocked(getPeriod(t.date))?'<span class="badge neutral" title="Kỳ đã chốt lương — không sửa/xoá được">Đã chốt</span>':rowActions(t.id)}</td></tr>`;
-      }).join('') || `<tr><td colspan="9" class="empty">${periodScopeAll?'Chưa có chuyến nào.':'Chưa có chuyến nào trong kỳ đang xem.'}</td></tr>`}
-      </tbody></table></div>`;
+          <td class="num nowrap">${baseRate==null?'<span class="muted">—</span>':fmtMoney(baseRate)}</td>
+          <td class="num nowrap"${isPointRow?' title="Phụ cấp rớt điểm của dòng Trả điểm này — tiền thật tính gộp theo ngày+khách hàng ở Bảng lương › Phụ cấp"':''}>${price===null?'<span class="badge warn">Thiếu giá</span>':price===0?'<span class="muted">—</span>':fmtMoney(price)}</td>
+          <td class="num nowrap">${mealRate==null?'<span class="muted">—</span>':fmtMoney(mealRate)}</td>
+          <td>${isPeriodLocked(getPeriod(t.date))?'<span class="badge neutral" title="Kỳ đã chốt lương — không sửa/xoá được">Đã chốt</span>':rowActions(t.id)}</td></tr>`).join('')
+        || `<tr><td colspan="${tripBulkDeleteRequested?11:10}" class="empty">${periodScopeAll?'Chưa có chuyến nào.':'Chưa có chuyến nào trong kỳ đang xem.'}</td></tr>`}
+      </tbody>
+      ${list.length ? `<tfoot><tr class="total-row">
+        <td colspan="${tripBulkDeleteRequested?7:6}">Tổng cộng — ${list.length} chuyến</td>
+        <td class="num">${fmtMoney(totalBase)}</td>
+        <td class="num">${fmtMoney(totalPrice)}</td>
+        <td class="num">${fmtMoney(totalMeal)}</td>
+        <td></td>
+      </tr></tfoot>` : ''}
+      </table></div>`;
 }
 
 // "Mã khách hàng — Chi tiết" — nếu Chi tiết đã tự bắt đầu bằng đúng mã khách
@@ -3190,7 +3628,6 @@ function tripCustomerLabel(t, fullRoute){
   // Chuyến không ghi tuyến (VD Trực/Nghỉ) — chỉ hiện mã khách hàng, không để "GHN —" thừa dấu gạch.
   if(!String(t.route||'').trim()) return esc(t.project);
   const detail = fullRoute ? t.route : routeDisplayName(t.project, t.route);
-  if(method==='tripPlusExtras') return `${customerDetailLabel(t.project, detail)}<br><span class="muted">Bốc xếp ×${safeNum(t.loadingCount)}</span>`;
   return customerDetailLabel(t.project, detail);
 }
 // "Điểm giao ×N" — tách riêng khỏi tripCustomerLabel() để mỗi bảng tự đặt
@@ -3309,7 +3746,7 @@ function openTripModal(trip, prefill){
   // Mỗi khách hàng cần các ô nhập khác nhau: route/tripPlusExtras cần chọn
   // Tuyến (tra bảng giá); km cần nhập số km; fixed không cần ô nào thêm.
   function methodFieldsHtml(method, seed){
-    // Trực/Nghỉ: không chạy chuyến nên không cần Tuyến/Số km/Khu vực/Bốc xếp.
+    // Trực/Nghỉ: không chạy chuyến nên không cần Tuyến/Số km/Khu vực.
     const seedType = tripTypeOf(seed||{});
     if(seedType==='standby' || seedType==='off') return '';
     if(method==='km'){
@@ -3360,11 +3797,7 @@ function openTripModal(trip, prefill){
     const routeOpts = routeComboOptions($('m-project').value);
     const routeField = `<div class="modal-field"><label for="m-route-text">Tuyến đường *</label>${
       comboField('m-route', routeOpts, (seed && seed.route) || '', !$('m-project').value ? 'Chọn Khách hàng trước' : routeOpts.length>1?'Gõ tên tuyến…':'Chưa có tuyến cho khách hàng này')}</div>`;
-    if(method==='tripPlusExtras'){
-      return routeField
-        + `<div class="modal-field"><label for="m-loading">Số lượt bốc xếp</label><input type="number" min="0" step="1" id="m-loading" value="${seed.loadingCount!=null?seed.loadingCount:''}"></div>`;
-    }
-    return routeField; // 'route'
+    return routeField; // 'route' / 'tripPlusExtras'
   }
   function bindRouteCombo(){
     if(!$('m-route')) return;
@@ -3384,7 +3817,6 @@ function openTripModal(trip, prefill){
     bindRouteCombo();
     if($('m-km')) $('m-km').oninput = refreshPreview;
     if($('m-surgezone')) $('m-surgezone').onchange = ()=>{ refreshMethodFields(currentDraft()); refreshPreview(); };
-    if($('m-loading')) $('m-loading').oninput = refreshPreview;
   }
   function currentDraft(){
     return {
@@ -3393,7 +3825,6 @@ function openTripModal(trip, prefill){
       tripType: $('m-triptype').value,
       km: $('m-km') ? ($('m-km').value===''?null:safeNum($('m-km').value)) : null,
       surgeZone: $('m-surgezone') ? $('m-surgezone').value : '',
-      loadingCount: $('m-loading') ? safeNum($('m-loading').value) : 0,
       pointCount: safeNum($('m-point').value),
     };
   }
@@ -3455,7 +3886,6 @@ function openTripModal(trip, prefill){
         : '<span class="warn">Chưa có đơn giá bậc thang km cho đúng khoảng km/khu vực/tải trọng xe này — vào Cấu hình › Khách hàng › Sửa để thêm.</span>';
     }else{
       html = `Đơn giá áp dụng: <b>${fmtMoney(price)} đ</b> — tính vào <b>${surge?'Lương tăng cường':'Lương chuyến'}</b>.`;
-      if(method==='tripPlusExtras') html += ' (đã gồm bốc xếp)';
       if(matchedKmRoute) html += ' (theo đơn giá Tuyến, không tra bậc thang km)';
     }
     html += dropHtml;
@@ -3502,7 +3932,7 @@ function openTripModal(trip, prefill){
       route: (method==='route'||method==='tripPlusExtras'||method==='km') ? draft.route : '',
       km: method==='km' ? draft.km : null,
       surgeZone: method==='km' ? (draft.surgeZone || (isSurgeTrip(draft) ? 'inner' : '')) : '',
-      loadingCount: method==='tripPlusExtras' ? draft.loadingCount : 0,
+      loadingCount: 0,
       // Trực/Nghỉ: ô Số điểm giao bị ẩn (không chạy chuyến) — lưu 0.
       pointCount: (draft.tripType==='standby' || draft.tripType==='off') ? 0 : draft.pointCount,
       origin: $('m-origin').value.trim(), destination: $('m-dest').value.trim(),
@@ -3568,7 +3998,7 @@ const TRIP_TYPE_HEADER = `Loại chuyến (${TRIP_TYPES.map(t=>t.l).join('/')})`
 // còn đúng 1 cột, dùng cho cả tra bậc thang km lẫn giá cố định tăng cường.
 const KM_ZONE_HEADER = 'Khu vực (chỉ khi KH Theo km; Nội thành/Ngoại tỉnh)';
 const TRIP_IMPORT_HEADER = ['Ngày','Mã chuyến','Mã LX','Biển số','Khách hàng','Tuyến đường',
-  'Số km','Số lượt bốc xếp','Số điểm giao',
+  'Số km','Số điểm giao',
   TRIP_TYPE_HEADER, KM_ZONE_HEADER,'Điểm đi','Điểm đến'];
 // Chấp nhận gõ tự do: để trống hoặc "Chuyến" -> normal; "Có"/"x" (mẫu cũ) cũng
 // hiểu là Tăng cường cho khỏi hỏng file mẫu tải từ trước.
@@ -3735,7 +4165,7 @@ function validateTripImportRow(row, usedCodes, seenKeys){
     route: (needRoute || method==='km') ? routeName : '',
     km: method==='km' ? ((km===''||km===undefined) ? null : safeNum(km)) : null,
     surgeZone,
-    loadingCount: method==='tripPlusExtras' ? safeNum(row['Số lượt bốc xếp']) : 0,
+    loadingCount: 0,
     pointCount: (parsedType==='standby' || parsedType==='off') ? 0 : safeNum(row['Số điểm giao']),
     origin: String(row['Điểm đi']||'').trim() || (parts?parts.origin:''),
     destination: String(row['Điểm đến']||'').trim() || (parts?parts.destination:''),
@@ -3789,7 +4219,6 @@ function openTripImportReviewModal(normalizedRows){
       <td><input type="text" class="${c('Khách hàng')}" style="width:80px;" ${f('Khách hàng')} value="${esc(r['Khách hàng']||'')}"></td>
       <td><input type="text" class="${c('Tuyến đường','text')}" style="min-width:170px;" ${f('Tuyến đường')} value="${esc(r['Tuyến đường']||'')}"></td>
       <td><input type="number" class="${c('Số km')}" style="width:70px;" ${f('Số km')} value="${r['Số km']!=null?r['Số km']:''}"></td>
-      <td><input type="number" class="${c('Số lượt bốc xếp')}" style="width:56px;" ${f('Số lượt bốc xếp')} value="${r['Số lượt bốc xếp']!=null?r['Số lượt bốc xếp']:''}"></td>
       <td><input type="number" class="${c('Số điểm giao')}" style="width:56px;" ${f('Số điểm giao')} value="${r['Số điểm giao']!=null?r['Số điểm giao']:''}"></td>
       <td><select class="${c(TRIP_TYPE_HEADER)}" ${f(TRIP_TYPE_HEADER)}>
         ${parseTripType(r[TRIP_TYPE_HEADER])===undefined ? `<option value="${esc(r[TRIP_TYPE_HEADER])}" selected>"${esc(r[TRIP_TYPE_HEADER])}" — chọn lại</option>` : ''}
@@ -3884,6 +4313,14 @@ function bindTrips(){
       if(confirm(`Xoá chuyến ${t.tripCode||''} ngày ${fmtDate(t.date)}?`)){ await deleteDoc('trips', id); toast('Đã xoá chuyến.'); }
     }
   );
+  // Cột tick chọn hàng loạt mặc định ẨN — bấm "Yêu cầu xoá" ở menu "Thao
+  // tác" (gộp cùng Tải mẫu/Nhập Excel) mới hiện ra; bấm lại ("Huỷ yêu cầu
+  // xoá") thì ẩn đi + bỏ hết tick đang chọn.
+  document.querySelector('[data-act="toggle-bulk-delete"]').onclick = ()=>{
+    tripBulkDeleteRequested = !tripBulkDeleteRequested;
+    if(!tripBulkDeleteRequested) selectedTripIds.clear();
+    render();
+  };
   // Tick chọn hàng loạt để xoá nhiều chuyến 1 lần — cập nhật thẳng DOM (nút
   // "Xoá đã chọn"/ô chọn tất cả) thay vì gọi render() lại toàn trang mỗi lần
   // tick 1 dòng, để không nhảy cuộn trang mỗi lần chọn.
@@ -3899,13 +4336,16 @@ function bindTrips(){
       selectAll.checked = boxes.length>0 && boxes.every(b=>b.checked);
     }
   }
+  // Mọi phần tử dưới đây CHỈ tồn tại khi tripBulkDeleteRequested=true (xem
+  // renderTrips) — bỏ qua hoàn toàn khi đang ẩn, không gán sự kiện vào null.
   document.querySelectorAll('.trip-select').forEach(cb=>{
     cb.onchange = ()=>{
       if(cb.checked) selectedTripIds.add(cb.dataset.id); else selectedTripIds.delete(cb.dataset.id);
       updateBulkDeleteUI();
     };
   });
-  $('trip-select-all').onchange = e=>{
+  const selectAllBox = $('trip-select-all');
+  if(selectAllBox) selectAllBox.onchange = e=>{
     const checked = e.target.checked;
     document.querySelectorAll('.trip-select').forEach(cb=>{
       cb.checked = checked;
@@ -3913,7 +4353,8 @@ function bindTrips(){
     });
     updateBulkDeleteUI();
   };
-  document.querySelector('[data-act="bulk-delete"]').onclick = async ()=>{
+  const bulkDeleteBtn = document.querySelector('[data-act="bulk-delete"]');
+  if(bulkDeleteBtn) bulkDeleteBtn.onclick = async ()=>{
     if(!selectedTripIds.size) return;
     const ids = [...selectedTripIds];
     if(guardPeriodEdit(ids.map(id=>(state.trips.find(t=>t.id===id)||{}).date).filter(Boolean))) return;
@@ -3922,6 +4363,105 @@ function bindTrips(){
     selectedTripIds.clear();
     toast(`Đã xoá ${ids.length} chuyến.`);
   };
+
+  // Đánh dấu dòng để dễ đối chiếu: chuột trái 1 dòng bất kỳ = tô màu dòng đó,
+  // bấm lại = bỏ tô — không giới hạn số dòng cùng tô. Bấm chuột PHẢI 1 lần ở
+  // bất kỳ đâu trong bảng = tắt hết toàn bộ (không hiện menu chuột phải của
+  // trình duyệt). Không tô khi bấm vào ô tick/nút Sửa/Xoá — để các nút đó vẫn
+  // hoạt động bình thường.
+  const tripTablewrap = document.querySelector('#main .tablewrap');
+  if(tripTablewrap){
+    tripTablewrap.querySelectorAll('.trip-row').forEach(tr=>{
+      tr.addEventListener('click', e=>{
+        if(e.target.closest('input, button, a')) return;
+        tr.classList.toggle('row-highlight');
+      });
+    });
+    tripTablewrap.addEventListener('contextmenu', e=>{
+      e.preventDefault();
+      tripTablewrap.querySelectorAll('.row-highlight').forEach(tr=>tr.classList.remove('row-highlight'));
+    });
+  }
+
+  // Lọc riêng theo cột (biểu tượng phễu trên tiêu đề) — panel lọc dựng bằng
+  // JS, gắn thẳng vào <body> (không nằm trong #main) để không bị khung bảng
+  // cuộn (.tablewrap{overflow:auto}) cắt mất khi bảng dài — giống cách menu
+  // "⋯" của từng dòng (setupRowMenus ở khối "giao diện mới") đã làm.
+  function closeColFilterPanel(){
+    const p = document.querySelector('.th-filter-panel');
+    if(p) p.remove();
+    tripColFilterOpen = null;
+  }
+  function bindColFilterPanel(panel, key){
+    // Giữ 1 "bản nháp" các giá trị đang được tick (Set) — KHÔNG đụng vào
+    // filters.trips.col[key] (bộ lọc thật) cho tới khi bấm OK, để Huỷ không
+    // áp dụng gì và gõ tìm không làm mất lựa chọn đã tick trước đó.
+    const allValues = [...panel.querySelectorAll('.cf-val')].map(cb=>cb.value);
+    const draftChecked = new Set([...panel.querySelectorAll('.cf-val')].filter(cb=>cb.checked).map(cb=>cb.value));
+    const listEl = panel.querySelector('.cf-list');
+    const allBox = panel.querySelector('.cf-all');
+    const searchInput = panel.querySelector('.cf-search-input');
+    const rows = [...listEl.querySelectorAll('.cf-check')];
+
+    function visibleRows(){ return rows.filter(lbl=>!lbl.hidden); }
+    // "Chọn tất cả" là tri-state: tick hết/tick 1 phần/không tick gì, CHỈ
+    // tính trên các dòng ĐANG HIỆN theo ô tìm (yêu cầu 2+3) — dòng bị ẩn bởi
+    // ô tìm giữ nguyên trạng thái, không bị đụng tới.
+    function syncAllBox(){
+      const vis = visibleRows();
+      if(!vis.length){ allBox.checked = false; allBox.indeterminate = false; return; }
+      const checkedCount = vis.filter(lbl=>lbl.querySelector('.cf-val').checked).length;
+      allBox.checked = checkedCount===vis.length;
+      allBox.indeterminate = checkedCount>0 && checkedCount<vis.length;
+    }
+    rows.forEach(lbl=>{
+      const cb = lbl.querySelector('.cf-val');
+      cb.onchange = ()=>{
+        if(cb.checked) draftChecked.add(cb.value); else draftChecked.delete(cb.value);
+        syncAllBox();
+      };
+    });
+    allBox.onchange = ()=>{
+      visibleRows().forEach(lbl=>{
+        const cb = lbl.querySelector('.cf-val');
+        cb.checked = allBox.checked;
+        if(allBox.checked) draftChecked.add(cb.value); else draftChecked.delete(cb.value);
+      });
+      allBox.indeterminate = false;
+    };
+    if(searchInput) searchInput.oninput = ()=>{
+      const qv = searchInput.value.trim().toLowerCase();
+      rows.forEach(lbl=>{ lbl.hidden = !!qv && !lbl.dataset.cfText.includes(qv); });
+      syncAllBox();
+    };
+    panel.querySelector('[data-cf-ok]').onclick = ()=>{
+      filters.trips.col[key] = allValues.filter(v=>!draftChecked.has(v)); // lưu danh sách giá trị BỊ LOẠI (xem quy ước ở filters.trips.col)
+      closeColFilterPanel();
+      render();
+    };
+    panel.querySelector('[data-cf-cancel]').onclick = closeColFilterPanel;
+  }
+  document.querySelectorAll('.th-filter-btn').forEach(btn=>{
+    btn.onclick = e=>{
+      e.stopPropagation();
+      const key = btn.dataset.colf;
+      if(tripColFilterOpen===key){ closeColFilterPanel(); return; }
+      closeColFilterPanel();
+      tripColFilterOpen = key;
+      const panel = document.createElement('div');
+      panel.className = 'th-filter-panel';
+      panel.innerHTML = colFilterPanelHtml(key);
+      panel.addEventListener('click', ev=>ev.stopPropagation());
+      document.body.appendChild(panel);
+      const r = btn.getBoundingClientRect();
+      const w = panel.offsetWidth, h = panel.offsetHeight;
+      let top = r.bottom + 4; if(top + h > window.innerHeight - 8) top = r.top - h - 4;
+      const left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8));
+      panel.style.top = top + 'px';
+      panel.style.left = left + 'px';
+      bindColFilterPanel(panel, key);
+    };
+  });
 }
 
 /* =========================================================================
@@ -4577,6 +5117,10 @@ function openDriverModal(rec){
     </div>${MODAL_BUTTONS}`);
   const $ = id=>document.getElementById(id);
   bindCombo('m-plate', vehicleComboOptions('— Không —'));
+  // Gõ mức lương cứng thì tự tick "Có lương cứng" — trước đây nhập số mà quên
+  // tick thì vẫn báo "Đã lưu" nhưng hasFixedSalary=false, Danh sách lái xe hiện
+  // "Không" và Bảng lương không cộng đồng nào.
+  $('m-fixed').addEventListener('input', ()=>{ if(safeNum(readMoney('m-fixed'))>0) $('m-hasfixed').checked = true; });
   $('m-cancel').onclick = closeModal;
   $('m-save').onclick = async ()=>{
     const name = $('m-name').value.trim();
@@ -4586,6 +5130,7 @@ function openDriverModal(rec){
     const hasFixed = $('m-hasfixed').checked;
     const fixed = safeNum(readMoney('m-fixed'));
     if(hasFixed && !fixed){ modalError('Đã bật lương cứng thì cần nhập mức lương lớn hơn 0.'); return; }
+    if(!hasFixed && fixed>0){ modalError('Đã nhập Mức lương cứng nhưng chưa tick ô "Có lương cứng" — tick ô đó, hoặc xoá mức lương nếu lái xe không hưởng lương cứng.'); return; }
     const seniority = readMoney('m-seniority');
     const data = { code, name, phone:$('m-phone').value.trim(), driverType:$('m-type').value, status:$('m-status').value,
       hasFixedSalary:hasFixed, fixedSalaryAmount:fixed, seniorityAllowance:seniority, plate:$('m-plate').value || null };
@@ -4628,13 +5173,21 @@ function validateDriverImportRow(row){
   const status = statusRaw ? DRIVER_STATUS.find(s=>s.toLowerCase()===statusRaw.toLowerCase()) : (existing ? existing.status : DRIVER_STATUS[0]);
   if(statusRaw && !status) err('Trạng thái', `"${statusRaw}" không hợp lệ.` + importHint(DRIVER_STATUS));
   const fixedRaw = String(row['Lương cứng (Có/Không)']||'').trim();
-  const hasFixedSalary = fixedRaw ? sheetYes(fixedRaw) : (existing ? !!existing.hasFixedSalary : false);
   const fixedAmountRaw = row['Mức lương cứng'];
   const fixedAmountFilled = fixedAmountRaw!=null && String(fixedAmountRaw).trim()!=='';
+  // Ô tiền gõ dạng chữ "9.000.000"/"9,000,000" — safeNum (parseFloat) chỉ đọc
+  // được "9", nên chuỗi phải bóc dấu phân cách qua parseMoney.
+  const fixedAmount = !fixedAmountFilled ? 0
+    : (typeof fixedAmountRaw==='number' ? fixedAmountRaw : safeNum(parseMoney(fixedAmountRaw)));
+  // Cột Có/Không để trống nhưng đã điền mức lương > 0 thì hiểu là "Có" —
+  // trước đây trường hợp này bị coi là "Không", mức lương bị bỏ đi mà vẫn báo nhập xong.
+  const hasFixedSalary = fixedRaw ? sheetYes(fixedRaw)
+    : (fixedAmount>0 ? true : (existing ? !!existing.hasFixedSalary : false));
   const fixedSalaryAmount = hasFixedSalary
-    ? (fixedAmountFilled ? safeNum(fixedAmountRaw) : (existing && existing.hasFixedSalary ? existing.fixedSalaryAmount : null))
+    ? (fixedAmountFilled ? fixedAmount : (existing && existing.hasFixedSalary ? existing.fixedSalaryAmount : null))
     : null;
   if(hasFixedSalary && !fixedSalaryAmount) err('Mức lương cứng', 'Đã chọn "Có" lương cứng thì cần nhập mức lương lớn hơn 0.' + importHint(['9000000']));
+  if(!hasFixedSalary && fixedAmount>0) err('Lương cứng (Có/Không)', 'Đã điền Mức lương cứng nhưng cột này đang là "Không" — chọn "Có", hoặc xoá mức lương.');
   const phoneRaw = String(row['SĐT']||'').trim();
   const phone = phoneRaw ? phoneRaw : (existing ? (existing.phone||'') : '');
   if(errors.length) return { errors, data:null };
@@ -4665,6 +5218,8 @@ function openDriverImportReviewModal(rawRows){
     const r = d.row, bad = d.errors.length>0;
     const f = name=>`data-import-field="${esc(name)}"`;
     const c = (field, extra)=>importCellClass(d.errors, field) + (extra?' '+extra:'');
+    // Khớp đúng quy tắc của validateDriverImportRow: cột Có/Không trống mà có mức lương thì là "Có".
+    const fixedYes = d.data ? d.data.hasFixedSalary : sheetYes(r['Lương cứng (Có/Không)']);
     return `<tr class="${bad?'row-warn':''}" data-import-row="${d.id}">
       <td><input type="text" class="${c('Mã LX','text')}" style="width:80px;" ${f('Mã LX')} value="${esc(r['Mã LX']||'')}"></td>
       <td><input type="text" class="${c('Họ tên','text')}" style="min-width:160px;" ${f('Họ tên')} value="${esc(r['Họ tên']||'')}"></td>
@@ -4672,8 +5227,8 @@ function openDriverImportReviewModal(rawRows){
       <td><select class="${c('Loại lái xe')}" ${f('Loại lái xe')}><option value=""${!r['Loại lái xe']?' selected':''}>— Mặc định —</option>${DRIVER_TYPES.map(t=>`<option${String(r['Loại lái xe']||'').trim().toLowerCase()===t.toLowerCase()?' selected':''}>${esc(t)}</option>`).join('')}</select></td>
       <td><input type="text" class="${c('Biển số xe phụ trách','text')}" style="width:90px;" ${f('Biển số xe phụ trách')} value="${esc(r['Biển số xe phụ trách']||'')}"></td>
       <td><select class="${c('Trạng thái')}" ${f('Trạng thái')}><option value=""${!r['Trạng thái']?' selected':''}>— Mặc định —</option>${DRIVER_STATUS.map(t=>`<option${String(r['Trạng thái']||'').trim().toLowerCase()===t.toLowerCase()?' selected':''}>${esc(t)}</option>`).join('')}</select></td>
-      <td><select class="${c('Lương cứng (Có/Không)')}" ${f('Lương cứng (Có/Không)')}><option${!sheetYes(r['Lương cứng (Có/Không)'])?' selected':''}>Không</option><option${sheetYes(r['Lương cứng (Có/Không)'])?' selected':''}>Có</option></select></td>
-      <td class="num"><input type="number" class="${c('Mức lương cứng')}" style="width:120px;" ${f('Mức lương cứng')} value="${r['Mức lương cứng']!=null?r['Mức lương cứng']:''}"></td>
+      <td><select class="${c('Lương cứng (Có/Không)')}" ${f('Lương cứng (Có/Không)')}><option${!fixedYes?' selected':''}>Không</option><option${fixedYes?' selected':''}>Có</option></select></td>
+      <td class="num"><input type="text" inputmode="numeric" class="${c('Mức lương cứng')}" style="width:120px;" ${f('Mức lương cứng')} value="${esc(r['Mức lương cứng']!=null?r['Mức lương cứng']:'')}"></td>
       <td style="text-align:center;">${importErrorCellHtml(d.errors)}</td>
       <td><button type="button" class="btn sm danger" data-remove-import-row="${d.id}">Bỏ</button></td>
     </tr>`;
@@ -5001,8 +5556,8 @@ function customerRateSummary(c){
     ];
     return `<span class="muted">${label}</span><br><span class="muted">Tăng cường: ${surgeBits.join(', ')}</span>`;
   }
-  if(c.calcMethod==='tripPlusExtras') return `Bốc xếp ${fmtMoney(c.loadingPrice)} đ/lượt`;
   if(c.calcMethod==='route') return `<span class="muted">Xem ở Lương theo tuyến</span>${customerHasStandbyConfig(c)?'<br><span class="muted">Có cấu hình Lương trực</span>':''}`;
+  if(c.calcMethod==='tripPlusExtras') return '<span class="muted">Xem ở Lương theo tuyến</span>';
   return '<span class="muted">Xem lương cứng ở hồ sơ lái xe</span>';
 }
 function renderCustomers(){
@@ -5158,9 +5713,6 @@ function openCustomerModal(rec){
         (1) mỗi chuyến tăng cường Ngoại tỉnh vượt ngưỡng km → cộng vào <b>Phụ cấp</b>;
         (2) nếu tick ô trên: mỗi ngày mọi chuyến của lái xe đều ghi khách hàng này (trừ Nghỉ) → cộng vào <b>Lương cố định</b>; ngày đó không cộng thêm khoản (1).</div>
       <div class="modal-field full"><label>Bậc thang km × tải trọng xe theo từng khu vực (chuyến thường)</label>${kmRegionsHtml()}</div>`;
-    if(method==='tripPlusExtras') return `
-      <div class="modal-field"><label for="m-loading">Đơn giá bốc xếp (đ/lượt) *</label>${moneyInputHtml('m-loading', c.loadingPrice)}</div>
-      <div class="full hint">Lương chuyến = đơn giá theo Tuyến (cấu hình ở "Lương theo tuyến") + số lượt bốc xếp × đơn giá bốc xếp. Phụ cấp rớt điểm (theo tải trọng xe) tính riêng, áp dụng chung cho mọi khách hàng — xem ở ô "Số điểm giao" trên từng chuyến.</div>`;
     if(method==='fixed') return `<div class="full hint">Lái xe làm cho khách hàng này nhận lương cứng theo kỳ — đặt mức lương ở hồ sơ Lái xe (mục "Lương cứng"). Chuyến vẫn ghi nhận để theo dõi vận hành nhưng không cộng thêm lương.</div>`;
     if(method==='route'){
       // Hiện đúng mức Lương trực đang áp dụng (kể cả dữ liệu cũ còn nằm ở 3
@@ -5227,10 +5779,6 @@ function openCustomerModal(rec){
         if(dup){ modalError(`Khu vực "${zoneLabel(r.zone)}": khoảng km "${dup[0]==null?'không giới hạn':dup[0]}" bị trùng.`); return; }
       }
       data.kmRegions = compact.regions;
-    }else if(method==='tripPlusExtras'){
-      const loading = safeNum(readMoney('m-loading'));
-      if(!loading){ modalError('Cần nhập đơn giá bốc xếp lớn hơn 0.'); return; }
-      data.loadingPrice = loading;
     }else if(method==='route'){
       // Lương trực lưu ở 3 ô RIÊNG; xoá 3 ô Phụ cấp đường dài (chỉ dùng cho
       // khách "Theo km") để đổi cách tính sau này không bị lẫn 2 khoản.
@@ -5285,7 +5833,7 @@ const ROUTE_IMPORT_COLS = [
 // không đổi khi sửa Tên tuyến.
 const ROUTE_TEXT_FIELDS = ['route', 'routeName'];
 
-// Khách hàng ĐANG tính "Theo tuyến" / "Theo chuyến + bốc xếp" luôn hiện ở
+// Khách hàng ĐANG tính "Theo tuyến cố định" / "Theo chuyến" luôn hiện ở
 // đây (bắt buộc phải có tuyến mới tính được lương). Khách "Theo km" cũng
 // hiện được — CHỈ khi cần cấu hình 1 vài tuyến chạy giá cố định thay vì tra
 // bậc thang km (VD NTF có 1 tuyến cố định): chuyến nào ghi đúng Tuyến đường
@@ -5695,7 +6243,7 @@ function allowanceCalcBasis(unit){
   switch(unit){
     case 'perTripByKmCapacity': return { l:'Theo km', c:'teal' };
     case 'perTrip': return { l:'Theo chuyến', c:'violet' };
-    case 'perOccurrence':
+    case 'perOccurrence': return { l:'Lần', c:'pink' };
     case 'perOccurrenceByProject': return { l:'Theo giờ', c:'pink' };
     case 'perPeriod':
     case 'perPeriodMinDays':
@@ -5715,11 +6263,17 @@ function allowanceRateSummaryForProject(t, project){
 
 // Một dòng KHÁCH HÀNG trong trang Phụ cấp — bấm mở ra sổ xuống đúng các loại
 // phụ cấp đang có đơn giá cho khách hàng đó (không trộn lẫn khách hàng khác).
-function renderAllowanceProjectRow(project, allTypes){
+// Có tìm kiếm (q) thì khách hàng khớp theo mã/tên vẫn hiện đủ mọi loại phụ
+// cấp của họ, còn khách hàng chỉ khớp vì có loại phụ cấp trùng từ khoá thì
+// CHỈ hiện đúng (các) loại phụ cấp đó — và dòng luôn tự xổ sẵn (không cần
+// bấm) để thấy ngay kết quả đang tìm.
+function renderAllowanceProjectRow(project, allTypes, q, custMatched){
   const key = project;
-  const open = expandedRows.has(key);
-  const cust = customerByCode(project);
   const applicable = allTypes.filter(t=>t.rates && t.rates[project]!=null);
+  const matched = q ? applicable.filter(t=>String(t.name).toLowerCase().includes(q)) : [];
+  const open = q ? true : expandedRows.has(key);
+  const shown = (q && !custMatched) ? matched : applicable;
+  const cust = customerByCode(project);
   const out = [`<tr>
     <td><button class="linkbtn" data-toggle="${esc(key)}" title="Xem phụ cấp của khách hàng này">${open?'▾':'▸'}</button></td>
     <td><b>${esc(project)}</b>${cust?` — ${esc(cust.name)}`:''}</td>
@@ -5728,7 +6282,7 @@ function renderAllowanceProjectRow(project, allTypes){
   if(open){
     out.push(`<tr class="expand-row"><td></td><td colspan="2">
       <table><thead><tr><th>Tên phụ cấp</th><th>Đơn vị tính</th><th>Đơn giá</th><th class="num">Áp dụng</th><th></th></tr></thead>
-      <tbody>${applicable.length ? applicable.map(t=>`<tr><td>${esc(t.name)}</td><td>${esc(unitLabel(t.unit))}</td>
+      <tbody>${shown.length ? shown.map(t=>`<tr><td>${esc(t.name)}</td><td>${esc(unitLabel(t.unit))}</td>
         <td>${allowanceRateSummaryForProject(t, project)}</td>
         <td class="num muted">Tự động</td>
         <td><button class="btn sm" data-edittype="${t.id}">Sửa</button> <button class="btn sm danger" data-deltype="${t.id}">Xoá</button></td></tr>`).join('')
@@ -5743,24 +6297,35 @@ function renderAllowanceConfig(){
   const allTypes = [...state.allowanceTypes].sort((a,b)=> String(a.name).localeCompare(String(b.name)));
   const projectSet = new Set();
   allTypes.forEach(t=>Object.keys(t.rates||{}).forEach(p=>projectSet.add(p)));
-  const projects = [...projectSet].sort();
+  let projects = [...projectSet].sort();
+  // Tìm theo mã/tên khách hàng HOẶC theo tên loại phụ cấp đang có ở khách
+  // hàng đó — gõ tên 1 phụ cấp (VD "Ăn ca") sẽ ra mọi khách hàng đang áp
+  // dụng phụ cấp cùng tên/tương tự, kèm xổ sẵn đúng dòng phụ cấp đó.
+  const q = filters.allowance.q.trim().toLowerCase();
+  const custMatch = {};
+  if(q){
+    projects = projects.filter(p=>{
+      const cust = customerByCode(p);
+      const cm = String(p).toLowerCase().includes(q) || (cust && String(cust.name).toLowerCase().includes(q));
+      custMatch[p] = !!cm;
+      if(cm) return true;
+      return allTypes.some(t=> t.rates && t.rates[p]!=null && String(t.name).toLowerCase().includes(q));
+    });
+  }
   const orphanTypes = allTypes.filter(t=>!Object.keys(t.rates||{}).length);
   return `
     <div class="pagehead">
       <div><h1>Phụ cấp</h1><p>Quản lý các loại phụ cấp và đơn giá theo từng khách hàng.</p></div>
+      <div class="actions"><button class="btn primary" data-act="add-type">+ Thêm loại</button></div>
     </div>
-
-    <div class="panel">
-      <div style="display:flex;justify-content:space-between;align-items:center;">
-        <h3 style="margin:0;">Phụ cấp theo từng khách hàng</h3>
-        <button class="btn sm primary" data-act="add-type">+ Thêm loại</button>
-      </div>
-      <div class="tablewrap" style="margin-top:10px;"><table>
-        <thead><tr><th></th><th>Khách hàng</th><th class="num">Số loại phụ cấp</th></tr></thead>
-        <tbody>${projects.length ? projects.map(p=>renderAllowanceProjectRow(p, allTypes)).join('')
-          : `<tr><td colspan="3" class="empty">Chưa có khách hàng nào được cấu hình phụ cấp — bấm "+ Thêm loại" để tạo. Gợi ý: Ăn ca, Lưu trú, Bốc xếp, Chờ hàng, Tăng ca, Ca đêm, Tiền ăn, Phụ cấp điện thoại…</td></tr>`}
-        </tbody></table></div>
+    <div class="filterbar">
+      <div class="field grow"><input type="text" id="f-q" placeholder="Tìm theo tên phụ cấp hoặc mã/tên khách hàng…" value="${esc(filters.allowance.q)}"></div>
     </div>
+    <div class="tablewrap"><table>
+      <thead><tr><th></th><th>Khách hàng</th><th class="num">Số loại phụ cấp</th></tr></thead>
+      <tbody>${projects.length ? projects.map(p=>renderAllowanceProjectRow(p, allTypes, q, custMatch[p])).join('')
+        : `<tr><td colspan="3" class="empty">${q?'Không tìm thấy phụ cấp hoặc khách hàng phù hợp.':'Chưa có khách hàng nào được cấu hình phụ cấp — bấm "+ Thêm loại" để tạo. Gợi ý: Ăn ca, Lưu trú, Bốc xếp, Chờ hàng, Tăng ca, Ca đêm, Tiền ăn, Phụ cấp điện thoại…'}</td></tr>`}
+      </tbody></table></div>
 
     ${orphanTypes.length ? `
     <div class="panel">
@@ -5774,9 +6339,93 @@ function renderAllowanceConfig(){
     </div>` : ''}`;
 }
 
+// Popup chọn nhiều BKS (nút "BKS áp dụng" ở khung Sửa/Thêm loại phụ cấp) —
+// style/cách mở Y HỆT panel lọc cột kiểu Excel ở Lịch lái xe (ô tìm + "Chọn
+// tất cả" tri-state + danh sách tick + OK/Huỷ, nổi ngoài #modalbox để không
+// bị khung modal cuộn cắt mất — xem .th-filter-panel), nhưng TỔNG QUÁT: nhận
+// sẵn danh sách giá trị + tick hiện tại + callback khi bấm OK, không đụng
+// filters.trips.col như panel kia (panel đó chỉ dành riêng cho bảng Chuyến đi).
+let platePanelOpen = false;
+document.addEventListener('click', e=>{
+  if(platePanelOpen && !e.target.closest('.plate-filter-btn, .plate-filter-panel')) closePlateFilterPanel();
+});
+function closePlateFilterPanel(){
+  const p = document.querySelector('.plate-filter-panel');
+  if(p) p.remove();
+  platePanelOpen = false;
+}
+function openPlateFilterPanel(btn, allValues, checked, onApply){
+  closePlateFilterPanel();
+  const checkedSet = new Set(checked);
+  const panel = document.createElement('div');
+  panel.className = 'th-filter-panel plate-filter-panel';
+  panel.innerHTML = `<input type="text" class="cf-search-input" placeholder="Tìm biển số…">
+    <label class="cf-check cf-all-row"><input type="checkbox" class="cf-all"> <b>Chọn tất cả</b></label>
+    <div class="cf-list">${allValues.length ? allValues.map(v=>`<label class="cf-check" data-cf-text="${esc(String(v).toLowerCase())}">
+        <input type="checkbox" class="cf-val" value="${esc(v)}"${checkedSet.has(v)?' checked':''}> <span class="cf-check-label">${esc(v)}</span></label>`).join('')
+      : '<div class="muted" style="padding:4px 2px;">Chưa có xe nào ở mục Phương tiện.</div>'}</div>
+    <div class="cf-actions"><button type="button" class="btn sm primary" data-cf-ok>OK</button><button type="button" class="btn sm" data-cf-cancel>Huỷ</button></div>`;
+  panel.addEventListener('click', ev=>ev.stopPropagation());
+  document.body.appendChild(panel);
+  const r = btn.getBoundingClientRect();
+  const w = panel.offsetWidth, h = panel.offsetHeight;
+  let top = r.bottom + 4; if(top + h > window.innerHeight - 8) top = r.top - h - 4;
+  const left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8));
+  panel.style.top = top + 'px';
+  panel.style.left = left + 'px';
+  platePanelOpen = true;
+  const listEl = panel.querySelector('.cf-list');
+  const allBox = panel.querySelector('.cf-all');
+  const searchInput = panel.querySelector('.cf-search-input');
+  const rows = [...listEl.querySelectorAll('.cf-check')];
+  function visibleRows(){ return rows.filter(lbl=>!lbl.hidden); }
+  function syncAllBox(){
+    const vis = visibleRows();
+    if(!vis.length){ allBox.checked = false; allBox.indeterminate = false; return; }
+    const n = vis.filter(lbl=>lbl.querySelector('.cf-val').checked).length;
+    allBox.checked = n===vis.length;
+    allBox.indeterminate = n>0 && n<vis.length;
+  }
+  rows.forEach(lbl=>{
+    const cb = lbl.querySelector('.cf-val');
+    cb.onchange = ()=>{ if(cb.checked) checkedSet.add(cb.value); else checkedSet.delete(cb.value); syncAllBox(); };
+  });
+  allBox.onchange = ()=>{
+    visibleRows().forEach(lbl=>{
+      const cb = lbl.querySelector('.cf-val');
+      cb.checked = allBox.checked;
+      if(allBox.checked) checkedSet.add(cb.value); else checkedSet.delete(cb.value);
+    });
+    allBox.indeterminate = false;
+  };
+  syncAllBox();
+  if(searchInput) searchInput.oninput = ()=>{
+    const qv = searchInput.value.trim().toLowerCase();
+    rows.forEach(lbl=>{ lbl.hidden = !!qv && !lbl.dataset.cfText.includes(qv); });
+    syncAllBox();
+  };
+  panel.querySelector('[data-cf-ok]').onclick = ()=>{ onApply([...checkedSet]); closePlateFilterPanel(); };
+  panel.querySelector('[data-cf-cancel]').onclick = closePlateFilterPanel;
+}
+
 function openTypeModal(rec){
   const t = rec || { unit:'perPeriod', rates:{} };
   const projects = allProjects();
+  const allPlates = state.vehicles.map(v=>v.plate).sort();
+  // Bảng "Đơn giá theo từng dự án" (đơn vị tính 1 số/dự án) chỉ hiện SẴN các
+  // dự án ĐÃ có đơn giá — không liệt kê hết mọi khách hàng như trước, tránh
+  // bảng dài tràn lan với mọi dự án không liên quan. Thêm dự án mới qua nút
+  // "+ Thêm dự án" dưới bảng (xem simpleRatesTableHtml). Giữ nguyên dự án
+  // "mồ côi" (đã xoá khỏi mục Khách hàng nhưng vẫn còn đơn giá cũ) để không
+  // mất dữ liệu — không cho thêm lại được vì không còn trong "projects".
+  let ratesVisibleProjects = projects.filter(p=>t.rates && t.rates[p]!=null);
+  Object.keys(t.rates||{}).forEach(p=>{ if(!ratesVisibleProjects.includes(p)) ratesVisibleProjects.push(p); });
+  // ratesDraft/platesDraft giữ giá trị ĐANG SỬA trong khung (kể cả khi đổi
+  // Đơn vị tính qua lại hoặc thêm/xoá dòng dự án) — chỉ đọc lại t.rates/
+  // t.platesByProject ĐÚNG 1 LẦN lúc mở khung, không đọc lại khi vẽ lại bảng.
+  const ratesDraft = { ...(t.rates||{}) };
+  const platesDraft = {};
+  Object.keys(t.platesByProject||{}).forEach(p=>{ platesDraft[p] = [...(t.platesByProject[p]||[])]; });
   // Bậc thang km × tải trọng xe (chỉ dùng khi đơn vị tính là "mỗi chuyến theo
   // km × tải trọng") — 1 dự án + 1 bảng {tiers,brackets}, y hệt cấu trúc 1
   // khu vực của khách hàng "Theo km" nên tái dùng thẳng các hàm dùng chung
@@ -5797,11 +6446,12 @@ function openTypeModal(rec){
       <div class="full hint" id="m-unit-hint"></div>
       <div id="m-extra-fields" class="full modal-grid" style="padding:0;"></div>
       <div id="m-rates-wrap" class="full modal-grid" style="padding:0;"></div>
-    </div>${MODAL_BUTTONS}`, { wide: t.unit==='perTripByKmCapacity' });
+    </div>${MODAL_BUTTONS}`, { wide: true });
   const $ = id=>document.getElementById(id);
 
   function extraFieldsHtml(unit){
-    if(unit==='perPeriodMinDays') return `<div class="modal-field"><label for="m-mindays">Số ngày công tối thiểu (vượt qua mới nhận trọn)</label><input type="number" min="0" step="1" id="m-mindays" value="${t.minDays!=null?t.minDays:15}"></div>`;
+    if(unit==='perPeriodMinDays') return `<div class="modal-field"><label for="m-mindays">Số ngày công tối thiểu (vượt qua mới nhận trọn)</label><input type="number" min="0" step="1" id="m-mindays" value="${t.minDays!=null?t.minDays:15}"></div>
+      <div class="modal-field full checkrow"><input type="checkbox" id="m-onceonly"${t.onceOnly?' checked':''}><label for="m-onceonly">Chỉ tính 1 lần/kỳ dù lái xe chạy nhiều dự án đều đủ điều kiện (VD Phụ cấp điện thoại — lái xe chỉ có 1 số điện thoại, không nhân theo số dự án)</label></div>`;
     if(unit==='perProratedMonth') return `<div class="modal-field"><label for="m-stddays">Số ngày công chuẩn/tháng</label><input type="number" min="1" step="1" id="m-stddays" value="${t.standardDays!=null?t.standardDays:26}"></div>`;
     return '';
   }
@@ -5873,6 +6523,71 @@ function openTypeModal(rec){
       refresh: refreshUnit,
     };
   }
+  // Đồng bộ ô "Đơn giá" đang gõ trong DOM vào ratesDraft — gọi TRƯỚC mọi lần
+  // vẽ lại bảng (đổi Đơn vị tính, thêm/xoá dòng dự án, thêm/xoá BKS…) để
+  // không mất số đang gõ ở các dòng KHÁC dòng vừa bấm nút.
+  function syncSimpleRatesFromDom(){
+    ratesVisibleProjects.forEach(p=>{
+      const el = $(`m-rate-${idSafe(p)}`);
+      if(el) ratesDraft[p] = el.value===''?null:safeNum(el.value);
+    });
+  }
+  function simpleRatesTableHtml(){
+    const remainingProjects = projects.filter(p=>!ratesVisibleProjects.includes(p));
+    const rows = ratesVisibleProjects.map(p=>{
+      const v = ratesDraft[p];
+      const selectedPlates = platesDraft[p]||[];
+      return `<tr>
+        <td>${esc(p)}</td>
+        <td class="num"><input type="number" min="0" class="qty-input" id="m-rate-${idSafe(p)}" value="${v!=null?v:''}"></td>
+        <td><button type="button" class="btn sm plate-filter-btn" data-plate-filter="${esc(p)}">${selectedPlates.length ? selectedPlates.length+' xe' : 'Tất cả xe'}</button></td>
+        <td><button type="button" class="btn sm danger" data-del-project-row="${esc(p)}">Xoá</button></td>
+      </tr>`;
+    }).join('');
+    return `<div class="modal-field full"><label>Đơn giá theo từng dự án — để trống thì dự án đó không áp dụng (0đ)</label>
+      <div class="tablewrap" style="margin-top:6px;"><table class="compact-table"><thead><tr><th>Dự án</th><th class="num">Đơn giá (đ)</th><th>BKS áp dụng</th><th></th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="4" class="empty">Chưa có dự án nào — bấm "+ Thêm dự án" để thêm.</td></tr>`}</tbody></table></div>
+      <div class="modal-actions" style="justify-content:flex-start;margin-top:8px;">
+        ${remainingProjects.length ? `<select class="qty-input" style="max-width:220px;" id="m-add-project-sel">
+          <option value="">— Chọn dự án để thêm —</option>
+          ${remainingProjects.map(p=>`<option value="${esc(p)}">${esc(p)}</option>`).join('')}
+        </select><button type="button" class="btn sm" id="m-add-project-btn">+ Thêm dự án</button>` : '<span class="hint">Đã thêm đủ mọi dự án.</span>'}
+      </div></div>`;
+  }
+  function redrawSimpleRatesTable(){
+    $('m-rates-wrap').innerHTML = simpleRatesTableHtml();
+    bindSimpleRatesTable();
+  }
+  function bindSimpleRatesTable(){
+    document.querySelectorAll('[data-plate-filter]').forEach(btn=>{
+      btn.onclick = e=>{
+        e.stopPropagation();
+        syncSimpleRatesFromDom();
+        const p = btn.dataset.plateFilter;
+        openPlateFilterPanel(btn, allPlates, platesDraft[p]||[], checked=>{
+          platesDraft[p] = checked;
+          redrawSimpleRatesTable();
+        });
+      };
+    });
+    document.querySelectorAll('[data-del-project-row]').forEach(btn=>{
+      btn.onclick = ()=>{
+        syncSimpleRatesFromDom();
+        const p = btn.dataset.delProjectRow;
+        ratesVisibleProjects = ratesVisibleProjects.filter(x=>x!==p);
+        delete ratesDraft[p];
+        delete platesDraft[p];
+        redrawSimpleRatesTable();
+      };
+    });
+    const addBtn = $('m-add-project-btn');
+    if(addBtn) addBtn.onclick = ()=>{
+      syncSimpleRatesFromDom();
+      const sel = $('m-add-project-sel');
+      if(sel && sel.value && !ratesVisibleProjects.includes(sel.value)) ratesVisibleProjects.push(sel.value);
+      redrawSimpleRatesTable();
+    };
+  }
   function ratesTableHtml(unit){
     if(unit==='perTripByKmCapacity') return kmProjectGridHtml();
     if(!projects.length) return '<div class="empty">Chưa có dự án/khách hàng nào — thêm ở mục Khách hàng trước.</div>';
@@ -5885,12 +6600,7 @@ function openTypeModal(rec){
             `<td class="num"><input type="number" min="0" class="qty-input" id="m-rate-${idSafe(p)}-${String(c).replace('.','_')}" value="${row[c]!=null?row[c]:''}"></td>`).join('')}</tr>`;
         }).join('')}</tbody></table></div></div>`;
     }
-    return `<div class="modal-field full"><label>Đơn giá theo từng dự án — để trống thì dự án đó không áp dụng (0đ)</label>
-      <div class="tablewrap" style="margin-top:6px;"><table class="compact-table"><thead><tr><th>Dự án</th><th class="num">Đơn giá (đ)</th></tr></thead>
-      <tbody>${projects.map(p=>{
-        const v = t.rates ? t.rates[p] : null;
-        return `<tr><td>${esc(p)}</td><td class="num"><input type="number" min="0" class="qty-input" id="m-rate-${idSafe(p)}" value="${v!=null?v:''}"></td></tr>`;
-      }).join('')}</tbody></table></div></div>`;
+    return simpleRatesTableHtml();
   }
   function refreshUnit(){
     const unit = $('m-unit').value;
@@ -5903,11 +6613,16 @@ function openTypeModal(rec){
         : 'Áp dụng theo đúng dự án lái xe thực chạy trong kỳ, khớp bảng đơn giá bên dưới.';
     $('m-extra-fields').innerHTML = extraFieldsHtml(unit);
     $('m-rates-wrap').innerHTML = ratesTableHtml(unit);
-    setModalWide(unit==='perTripByKmCapacity');
+    setModalWide(true);
     if(unit==='perTripByKmCapacity') bindKmProjectGrid();
+    else if(unit!=='perPeriodByCapacity') bindSimpleRatesTable();
   }
   refreshUnit();
-  $('m-unit').onchange = refreshUnit;
+  // Đổi Đơn vị tính qua lại giữa 2 loại đều dùng bảng "1 số/dự án" (VD "Theo
+  // ngày công" -> "Theo chuyến") KHÔNG được mất số đã gõ/BKS đã chọn — đồng
+  // bộ vào ratesDraft/platesDraft TRƯỚC khi vẽ lại bảng theo unit mới (bảng
+  // vẫn đọc từ draft, không đọc lại t.rates).
+  $('m-unit').onchange = ()=>{ syncSimpleRatesFromDom(); refreshUnit(); };
   $('m-cancel').onclick = closeModal;
   $('m-save').onclick = async ()=>{
     const name = $('m-name').value.trim();
@@ -5915,6 +6630,7 @@ function openTypeModal(rec){
     if(!name){ modalError('Cần nhập tên phụ cấp.'); return; }
     if(state.allowanceTypes.some(x=>x.name===name && (!rec || x.id!==rec.id))){ modalError('Loại phụ cấp này đã có.'); return; }
     const rates = {};
+    let platesByProject = {};
     if(unit==='perTripByKmCapacity'){
       syncKmProjectFromDom();
       if(!kmProjectDraft.project){ modalError('Cần chọn khách hàng áp dụng.'); return; }
@@ -5938,15 +6654,20 @@ function openTypeModal(rec){
       });
       if(!Object.keys(rates).length){ modalError('Cần nhập đơn giá cho ít nhất 1 dự án.'); return; }
     }else{
-      projects.forEach(p=>{
-        const el = $(`m-rate-${idSafe(p)}`);
-        const v = el && el.value!=='' ? safeNum(el.value) : null;
+      syncSimpleRatesFromDom();
+      ratesVisibleProjects.forEach(p=>{
+        const v = ratesDraft[p];
         if(v>0) rates[p] = v;
+        const plates = platesDraft[p];
+        if(plates && plates.length) platesByProject[p] = [...plates];
       });
       if(!Object.keys(rates).length){ modalError('Cần nhập đơn giá cho ít nhất 1 dự án.'); return; }
     }
-    const data = { name, unit, rates };
-    if(unit==='perPeriodMinDays') data.minDays = safeNum($('m-mindays').value) || 15;
+    const data = { name, unit, rates, platesByProject };
+    if(unit==='perPeriodMinDays'){
+      data.minDays = safeNum($('m-mindays').value) || 15;
+      data.onceOnly = $('m-onceonly').checked;
+    }
     if(unit==='perProratedMonth') data.standardDays = safeNum($('m-stddays').value) || 26;
     if(rec) await updateDoc('allowanceTypes', rec.id, data); else await addDoc('allowanceTypes', data);
     closeModal();
@@ -5955,6 +6676,7 @@ function openTypeModal(rec){
 }
 
 function bindAllowanceConfig(){
+  document.getElementById('f-q').oninput = e=>{ filters.allowance.q = e.target.value; render(); };
   document.querySelector('[data-act="add-type"]').onclick = ()=>openTypeModal(null);
   document.querySelectorAll('[data-toggle]').forEach(b=>{
     b.onclick = ()=>{ const k=b.dataset.toggle; expandedRows.has(k)?expandedRows.delete(k):expandedRows.add(k); render(); };
@@ -6010,10 +6732,10 @@ function renderGuide(){
         ${rule('Thực nhận', 'Lương cố định + Lương chuyến (gồm Tăng cường) + Phụ cấp + Thưởng/phạt nhiên liệu − Khấu trừ, làm tròn đến đồng.')}
         ${rule('Kỳ lương', 'Tháng dương lịch, mùng 1 → ngày cuối tháng. Chuyến và khấu trừ thuộc kỳ theo ngày ghi trên đó.')}
         ${rule('Lương cứng', `Mức đặt ở hồ sơ lái xe × số ngày có chuyến trong kỳ (mọi loại trừ Nghỉ) / ${FIXED_SALARY_STANDARD_DAYS}, tối đa ${FIXED_SALARY_STANDARD_DAYS} ngày. Cộng vào Lương cố định.`)}
-        ${rule('Lương chuyến', 'Theo cách tính của khách hàng: <b>Theo tuyến</b> — đơn giá tuyến (chuyến Tăng cường dùng đơn giá tăng cường nếu có); <b>Theo km</b> — bậc thang km × tải trọng xe đúng Khu vực; <b>Theo chuyến + bốc xếp</b> — đơn giá tuyến + số lượt bốc xếp × đơn giá bốc xếp; <b>Lương cứng</b> — 0đ. Loại Trả hàng, Trực, Trả điểm, Nghỉ luôn 0đ tiền chuyến.')}
+        ${rule('Lương chuyến', 'Theo cách tính của khách hàng: <b>Theo tuyến cố định</b>/<b>Theo chuyến</b> — đơn giá tuyến (chuyến Tăng cường dùng đơn giá tăng cường nếu có), chỉ khác tên gọi, cách tính giống nhau; <b>Theo km</b> — bậc thang km × tải trọng xe đúng Khu vực; <b>Lương cứng</b> — 0đ. Loại Trả hàng, Trực, Trả điểm, Nghỉ luôn 0đ tiền chuyến.')}
         ${rule('Tăng cường (khách Theo km)', 'Nội thành: mức cố định. Ngoại tỉnh trong ngưỡng km: mức cố định; vượt ngưỡng: tra bậc thang km × tải trọng của khối Ngoại tỉnh.')}
         ${rule('Phụ cấp đường dài (khách Theo km)', `Mức tháng theo tải trọng xe / ${LONG_HAUL_STANDARD_DAYS}, cộng ở 2 trường hợp: (1) mỗi chuyến tăng cường Ngoại tỉnh vượt ngưỡng km → cộng vào Phụ cấp; (2) khách bật ô "theo ngày chạy trọn" (mặc định NTF): mỗi ngày mọi dòng của lái xe (trừ Nghỉ, kể cả Trực/Trả hàng/Trả điểm) đều ghi khách đó → cộng vào Lương cố định, ngày đó không cộng thêm (1).`)}
-        ${rule('Lương trực (khách Theo tuyến)', `Mức tháng theo tải trọng xe / ${LONG_HAUL_STANDARD_DAYS} cho mỗi ngày lái xe có dòng Loại Trực ghi khách đó. Cộng vào Lương cố định, không phụ thuộc lái xe có lương cứng hay không.`)}
+        ${rule('Lương trực (khách Theo tuyến cố định)', `Mức tháng theo tải trọng xe / ${LONG_HAUL_STANDARD_DAYS} cho mỗi ngày lái xe có dòng Loại Trực ghi khách đó. Cộng vào Lương cố định, không phụ thuộc lái xe có lương cứng hay không.`)}
         ${rule('Phụ cấp rớt điểm', 'Mọi khách hàng. Điểm giao đầu tiên không tính, từ điểm thứ 2: xe đến 1,9 tấn 20.000đ/điểm; đến 5 tấn 30.000đ/điểm; trên 5 tấn 50.000đ/điểm. Ghi bằng ô "Số điểm giao" trên chuyến chính HOẶC mỗi điểm thêm 1 dòng Trả điểm — gộp theo ngày + khách hàng, ghi cả 2 cách thì lấy số lớn hơn, không cộng trùng.')}
         ${rule('Phụ cấp khác', 'Đơn giá riêng theo từng khách hàng ở Cấu hình › Phụ cấp, tính theo khách hàng lái xe thực chạy trong kỳ (khách để trống = không áp dụng). Cố định theo kỳ: 1 lần cho mỗi khách có chạy. Theo chuyến: số dòng chuyến (trừ Nghỉ). Theo ngày công: số ngày có chuyến. Vượt số ngày tối thiểu: hơn N ngày thì nhận trọn. Theo tỷ lệ ngày công: mức × số ngày / ngày chuẩn, tối đa 100%. Theo tải trọng xe: theo xe đang gán cho lái xe. Theo lần phát sinh: nhập ở Chấm công phụ cấp.')}
         ${rule('Mốc tải trọng', '"X tấn" nghĩa là xe <b>đến</b> X tấn. Bậc thang km và phụ cấp theo tải trọng: dùng mốc nhỏ nhất ≥ tải trọng xe (VD mốc 1,9/5/8, xe 3,5T dùng mốc 5T); xe nặng hơn mốc cao nhất hoặc chưa nhập tải trọng → báo thiếu giá. Rớt điểm, Lương trực, Phụ cấp đường dài: xe nặng hơn mốc cao nhất dùng mốc cao nhất.')}
@@ -6026,7 +6748,7 @@ function renderGuide(){
     <details class="panel guide-sec">
       <summary>1. Cấu hình (làm một lần, sửa khi chính sách đổi)</summary>
       <ul>
-        <li><b>Khách hàng</b>: mỗi khách 1 cách tính — Theo tuyến (GHN, BEST…), Theo km (NTF), Lương cứng (GS, SEWS), Theo chuyến + bốc xếp (SGW, BHX). Khách Theo km: bảng bậc thang có 2 khối Nội thành/Ngoại tỉnh (dùng 1 khối thì để trống khối kia), mỗi khối gồm các mốc tải trọng (cột) và khoảng km (dòng); để trống "Khoảng km (đến)" = không giới hạn. Khách Theo tuyến có thể đặt 3 mức Lương trực.</li>
+        <li><b>Khách hàng</b>: mỗi khách 1 cách tính — Theo tuyến cố định (GHN, BEST…), Theo km (NTF), Lương cứng (GS, SEWS), Theo chuyến (SGW, BHX — cách tính giống Theo tuyến cố định, chỉ khác tên gọi, không còn cộng thêm bốc xếp, xem Phụ cấp). Khách Theo km: bảng bậc thang có 2 khối Nội thành/Ngoại tỉnh (dùng 1 khối thì để trống khối kia), mỗi khối gồm các mốc tải trọng (cột) và khoảng km (dòng); để trống "Khoảng km (đến)" = không giới hạn. Khách Theo tuyến cố định có thể đặt 3 mức Lương trực.</li>
         <li><b>Xe</b>: nhập đúng <b>Tải trọng (tấn)</b> — dùng cho giá km, phụ cấp rớt điểm, Lương trực, Phụ cấp đường dài và phụ cấp theo tải trọng. Xe Khoán dầu nhập thêm định mức lít/100km.</li>
         <li><b>Lái xe</b>: chọn xe phụ trách (nhiều lái xe có thể chọn chung 1 xe theo ca), bật Lương cứng nếu khách trả thẳng cho lái xe, nhập Phụ cấp thâm niên nếu có (nhận trọn mỗi kỳ).</li>
         <li><b>Lương theo tuyến</b>: chọn khách hàng rồi gõ từng dòng — Tên tuyến (tên gọi nội bộ, không bắt buộc), Tuyến đường dạng "Điểm đi → Điểm đến" (đây là khoá tra giá), đơn giá, đơn giá tăng cường (trống = như giá thường), rồi bấm Lưu bảng giá. Đổi Tuyến đường đang có chuyến dùng thì các chuyến đó đổi theo. Khách Theo km cũng đặt được vài tuyến giá cố định ở đây.</li>
@@ -6213,6 +6935,7 @@ if(SUPABASE_ENABLED && !Auth.isLoggedIn()){
   /* ---------------- Icon nét mảnh (bộ Lucide, 24×24, nét 1.75) ---------------- */
   const ICONS = {
     search:'<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+    filter:'<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>',
     bell:'<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
     chevronDown:'<path d="m6 9 6 6 6-6"/>',
     chevronLeft:'<path d="m15 18-6-6 6-6"/>',
@@ -6286,6 +7009,7 @@ if(SUPABASE_ENABLED && !Auth.isLoggedIn()){
     // gắn sự kiện bằng document.querySelector('[data-act="add"]'), $('f-q')…
     // — nếu phần tử cũ còn nằm trên thanh (đứng trước #main) sẽ bắt nhầm.
     closeDocMenu();
+    closeBellMenu();
     ['tb-actions','tb-filters','tb-extra'].forEach(id=>{ const s = document.getElementById(id); if(s) s.replaceChildren(); });
     originalRender();
     try{ enhanceMain(); }catch(e){ console.error('[giao diện mới] dựng trang lỗi', e); }
@@ -6369,7 +7093,23 @@ if(SUPABASE_ENABLED && !Auth.isLoggedIn()){
     const m = document.getElementById('tb-actions'), b = document.getElementById('tb-doc-btn');
     const open = m.hidden;
     if(!open){ closeDocMenu(); return; }
+    closeBellMenu();
     m.hidden = false; b.setAttribute('aria-expanded','true'); b.classList.add('open');
+  }
+
+  // Chuông cảnh báo: bấm xổ ra panel "Kỳ … / Còn N cảnh báo…" (nội dung dựng
+  // ở refreshChrome) — y hệt cơ chế mở/đóng của nút tài liệu tròn ở trên.
+  function closeBellMenu(){
+    const m = document.getElementById('tb-bell-menu'), b = document.getElementById('tb-bell');
+    if(m) m.hidden = true;
+    if(b) b.setAttribute('aria-expanded','false');
+  }
+  function toggleBellMenu(){
+    const m = document.getElementById('tb-bell-menu'), b = document.getElementById('tb-bell');
+    const open = m.hidden;
+    closeDocMenu();
+    if(!open){ closeBellMenu(); return; }
+    m.hidden = false; b.setAttribute('aria-expanded','true');
   }
 
   // Thanh trên tràn (nhiều ô lọc, màn hình hẹp, hiện thêm "Xoá đã chọn")
@@ -6400,6 +7140,7 @@ if(SUPABASE_ENABLED && !Auth.isLoggedIn()){
     if(/nhập từ|phục hồi/.test(t)) return 'upload';
     if(/^lưu/.test(t)) return 'save';
     if(/xoá đã chọn/.test(t)) return 'trash';
+    if(act==='toggle-bulk-delete') return t.startsWith('huỷ') ? 'x' : 'trash';
     return null;
   }
   function decorateButtons(root){
@@ -6618,10 +7359,33 @@ if(SUPABASE_ENABLED && !Auth.isLoggedIn()){
         warnCount = buildWarnings(appPeriod).length + payrollRows(appPeriod).filter(r=>r.warnings && r.warnings.length).length;
       }
     }catch(e){}
+    const lock = periodLockOf(appPeriod);
     const dot = document.getElementById('tb-bell-dot');
     if(dot) dot.hidden = !warnCount;
     const bell = document.getElementById('tb-bell');
     if(bell) bell.title = warnCount ? `${warnCount} cảnh báo dữ liệu kỳ ${periodLabelVi(appPeriod)} — bấm để xem` : `Kỳ ${periodLabelVi(appPeriod)}: không có cảnh báo`;
+
+    // Panel xổ ra khi bấm chuông — đúng nội dung "Kỳ … / Còn N cảnh báo…"
+    // trước đây nằm ở thẻ cuối sidebar (đã bỏ thẻ đó, dời hẳn lên đây — bấm
+    // chuông thấy ngay, không cần nhảy thẳng sang Bảng lương mới biết có
+    // cảnh báo gì). Nút hành động theo đúng 3 trạng thái thẻ cũ: đã chốt ->
+    // "Xem bảng lương", còn cảnh báo -> "Xem cảnh báo", hết cảnh báo -> "Chốt
+    // lương" (bấm thẳng nút "lock-period" ở thanh trên của trang Bảng lương).
+    const bellMenu = document.getElementById('tb-bell-menu');
+    if(bellMenu){
+      bellMenu.innerHTML = `
+        <div class="tb-bell-menu-title">Kỳ ${esc(periodLabelVi(appPeriod))}${lock?' đã chốt':''}</div>
+        <div class="tb-bell-menu-text">${lock
+          ? `Chốt lúc ${esc(fmtDateTime(lock.lockedAt))}. Dữ liệu kỳ này đang được khoá.`
+          : warnCount ? `Còn ${warnCount} cảnh báo dữ liệu cần xử lý trước khi chốt lương.` : 'Dữ liệu đã đủ — có thể chốt lương kỳ này.'}</div>
+        <button type="button" class="btn sm primary" id="tb-bell-view">${lock ? 'Xem bảng lương' : warnCount ? 'Xem cảnh báo' : 'Chốt lương'}</button>`;
+      bellMenu.querySelector('#tb-bell-view').onclick = ()=>{
+        closeBellMenu();
+        if(!lock && warnCount){ warningsOpen = true; }
+        if(currentSection!=='payroll') setSection('payroll'); else render();
+        if(!lock && !warnCount){ const b = document.querySelector('#tb-actions [data-act="lock-period"]'); if(b) b.click(); }
+      };
+    }
 
     const st = document.getElementById('topbar-status');
     const stText = document.getElementById('storage-mode');
@@ -6643,24 +7407,6 @@ if(SUPABASE_ENABLED && !Auth.isLoggedIn()){
       sub.textContent = storageMode==='local' ? 'Bản offline (máy này)' : storageMode==='fallback' ? 'Đang lưu tạm trên máy này' : 'Hệ thống lương lái xe';
       avatar.textContent = 'VT';
     }
-
-    // Thẻ cuối sidebar: trạng thái kỳ lương đang xem
-    const card = document.getElementById('sb-card');
-    if(card){
-      const lock = periodLockOf(appPeriod);
-      card.innerHTML = `
-        <div class="sb-card-icon">${icon(lock?'lock':'shield', 26)}</div>
-        <div class="sb-card-title">Kỳ ${esc(periodLabelVi(appPeriod))}${lock?' đã chốt':''}</div>
-        <div class="sb-card-text">${lock
-          ? `Chốt lúc ${esc(fmtDateTime(lock.lockedAt))}. Dữ liệu kỳ này đang được khoá.`
-          : warnCount ? `Còn ${warnCount} cảnh báo dữ liệu cần xử lý trước khi chốt lương.` : 'Dữ liệu đã đủ — có thể chốt lương kỳ này.'}</div>
-        <button type="button" class="sb-card-btn" id="sb-card-btn">${lock ? 'Xem bảng lương' : warnCount ? 'Xem cảnh báo' : 'Chốt lương'}</button>`;
-      card.querySelector('#sb-card-btn').onclick = ()=>{
-        if(!lock && warnCount){ warningsOpen = true; }
-        if(currentSection!=='payroll') setSection('payroll'); else render();
-        if(!lock && !warnCount){ const b = document.querySelector('#tb-actions [data-act="lock-period"]'); if(b) b.click(); }
-      };
-    }
   }
 
   function initChrome(){
@@ -6675,8 +7421,11 @@ if(SUPABASE_ENABLED && !Auth.isLoggedIn()){
     $('tb-doc-btn').onclick = e=>{ e.stopPropagation(); toggleDocMenu(); };
     // Bấm 1 mục → app.js xử lý như bấm nút gốc, rồi đóng danh sách
     $('tb-actions').addEventListener('click', e=>{ if(e.target.closest('button')) setTimeout(closeDocMenu, 0); });
-    document.addEventListener('click', e=>{ if(!e.target.closest('#tb-doc')) closeDocMenu(); });
-    document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeDocMenu(); });
+    document.addEventListener('click', e=>{
+      if(!e.target.closest('#tb-doc')) closeDocMenu();
+      if(!e.target.closest('#tb-bell-wrap')) closeBellMenu();
+    });
+    document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closeDocMenu(); closeBellMenu(); } });
     $('side-next').innerHTML = icon('chevronRight', 16);
 
     document.querySelector('.sb-brand').addEventListener('click', e=>e.preventDefault());
@@ -6711,8 +7460,10 @@ if(SUPABASE_ENABLED && !Auth.isLoggedIn()){
       }
     });
 
-    // Chuông → Bảng lương, mở sẵn danh sách cảnh báo
-    $('tb-bell').onclick = ()=>{ warningsOpen = true; if(currentSection!=='payroll') setSection('payroll'); else render(); };
+    // Chuông → xổ panel "Kỳ … / Còn N cảnh báo…" (nội dung dựng ở
+    // refreshChrome); bấm "Xem cảnh báo" trong panel đó mới nhảy sang Bảng
+    // lương (xem refreshChrome) — không nhảy thẳng ngay khi bấm chuông nữa.
+    $('tb-bell').onclick = e=>{ e.stopPropagation(); toggleBellMenu(); };
 
   }
 

@@ -52,7 +52,6 @@
     </div>
     <div class="sb-label">Menu</div>
     <div id="navroot"></div>
-    <div class="sb-card" id="sb-card"></div>
   </nav>
   <!-- Nút cũ của app.js — giữ lại cho đúng id, giao diện mới dùng #sb-collapse -->
   <button id="sidebar-toggle" hidden aria-hidden="true">‹</button>
@@ -98,7 +97,10 @@
 
       <div class="tb-right">
         <span class="topbar-status" id="topbar-status"><span class="storagedot" id="storage-dot"></span><span id="storage-mode">Đang kết nối dữ liệu…</span></span>
-        <button type="button" class="tb-icon-btn tb-bell" id="tb-bell" title="Cảnh báo dữ liệu kỳ này" aria-label="Cảnh báo dữ liệu"><span class="tb-bell-dot" id="tb-bell-dot" hidden></span></button>
+        <div class="tb-bell-wrap" id="tb-bell-wrap">
+          <button type="button" class="tb-icon-btn tb-bell" id="tb-bell" title="Cảnh báo dữ liệu kỳ này" aria-label="Cảnh báo dữ liệu" aria-haspopup="true" aria-expanded="false"><span class="tb-bell-dot" id="tb-bell-dot" hidden></span></button>
+          <div class="tb-bell-menu" id="tb-bell-menu" hidden></div>
+        </div>
         <span class="tb-sep" aria-hidden="true"></span>
         <div class="tb-user">
           <span class="tb-avatar" id="tb-avatar">VT</span>
