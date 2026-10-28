@@ -140,10 +140,27 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         pass
 
 
+def open_server():
+    """Mở server ở cổng PORT; cổng đó đang bị chiếm (VD đang mở sẵn 1 cửa sổ
+    app khác — bản ở thư mục khác, hoặc file .exe) thì tự thử các cổng kế
+    tiếp, không báo lỗi rồi tắt như trước."""
+    last_error = None
+    for port in range(PORT, PORT + 20):
+        try:
+            return socketserver.TCPServer(('127.0.0.1', port), Handler), port
+        except OSError as e:
+            last_error = e
+    raise last_error
+
+
 if __name__ == '__main__':
-    with socketserver.TCPServer(('127.0.0.1', PORT), Handler) as httpd:
-        url = 'http://127.0.0.1:%d/index.html' % PORT
+    httpd, port = open_server()
+    with httpd:
+        url = 'http://127.0.0.1:%d/index.html' % port
         threading.Timer(0.6, lambda: webbrowser.open(url)).start()
+        if port != PORT:
+            print('(Cổng %d đang có 1 cửa sổ app khác mở sẵn — bản này chạy ở cổng %d.)' % (PORT, port))
         print('VIT TRANS — Lương lái xe đang chạy tại', url)
+        print('Thư mục app:', ROOT)
         print('Cứ để cửa sổ này mở trong lúc dùng app. Đóng cửa sổ này = tắt app.')
         httpd.serve_forever()
