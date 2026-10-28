@@ -83,6 +83,46 @@ nâng cấp, các chuyến cũ có ghi "Số lượt bốc xếp" sẽ không c�
 khoản này vào Lương chuyến. Các kỳ **đã chốt** không bị ảnh hưởng (Bảng
 lương đọc đúng bản đã lưu lúc chốt, không tính lại).
 
+## Nâng cấp ngày 28/10/2026 (Xuất bảng công lái xe + Mẫu bảng công)
+
+**Xuất bảng công lái xe** (Bảng lương › nút tài liệu): file Excel theo đúng
+mẫu bảng công của công ty, **mỗi lái xe 1 sheet đặt theo họ tên** (xuất các
+lái xe đang hiện theo bộ lọc Bảng lương — lọc 1 lái xe thì ra file riêng
+người đó). Mỗi sheet gồm:
+
+- Bảng theo ngày, mỗi chuyến ở Lịch lái xe 1 dòng: Ngày, BKS, Lái xe, Trạng
+  thái (loại chuyến), Dự án (mã khách hàng), Tuyến (= **Tên tuyến** ở Lương
+  theo tuyến; riêng NTF luôn ghi "Kho Nutifood Hưng Yên"), Chi tiết (tuyến
+  đường; khách theo km ghi điểm đến; ngày Trực/Nghỉ ghi "Trực"/"Nghỉ"), Km,
+  rồi 9 cột tiền: Lương cơ bản/Lương trực, Lương chuyến, Lương điểm, Tiền
+  ăn, Bốc xếp, Bốc xếp thuê, Chờ giờ, Ăn đêm, Hỗ trợ qua đêm. Dòng "Cộng theo
+  ngày" ở cuối bảng.
+- Dưới bảng, mỗi khoản chỉ có 1 lần trong kỳ ghi 1 dòng: Phụ cấp điện thoại,
+  Thâm niên, Khoán chi phí bảo quản xe, Tiền gửi xe, Thưởng giới thiệu lái
+  xe, Truy thu/Truy lĩnh, Vé gửi xe, Dầu chạy tiết kiệm; các khoản chưa xếp
+  cột nào ghi thành dòng "Phụ cấp khác: …".
+- Dòng **TỔNG LƯƠNG** cuối cùng = đúng "Tổng thu nhập" của lái xe đó ở Bảng
+  lương (chưa trừ Khấu trừ). Kỳ đã chốt lấy đúng số đã chốt.
+
+**Cấu hình › Mẫu bảng công**: kéo thả từng khoản (Lương chuyến, Lương cứng
+theo ngày, Lương trực, Phụ cấp rớt điểm, Phụ cấp thâm niên, Thưởng/phạt
+nhiên liệu… và từng Loại phụ cấp ở Cấu hình › Phụ cấp) vào đúng cột muốn
+ghi. Nhiều khoản cùng 1 cột thì cộng lại (VD "Phụ cấp ăn" + "Phụ cấp ăn NTF"
+cùng vào cột Tiền ăn). Khoản chưa từng kéo tự gợi ý cột theo tên (có chữ
+"ăn" → Tiền ăn, "bốc xếp thuê" → Bốc xếp thuê, "điện thoại" → Phụ cấp điện
+thoại…). Khoản cả kỳ (VD phụ cấp cố định theo kỳ) mà xếp vào cột theo ngày
+thì ghi ở chuyến đầu tiên của dự án đó.
+
+File Excel xuất bằng thư viện ExcelJS (tải từ cdnjs khi bấm xuất lần đầu)
+để giữ được font Times New Roman, viền ô, chữ đậm, dòng TỔNG LƯƠNG nền vàng
+như file mẫu — máy cần có mạng lúc xuất.
+
+**Database Supabase đang chạy thật: chạy `nang_cap_2026-10-28_mau_bang_cong.sql`
+trong Supabase › SQL Editor** — thêm bảng `export_settings` để lưu cách xếp
+cột dùng chung cho mọi tài khoản (chạy lại không lỗi, không đụng dữ liệu
+cũ). Chưa chạy thì vẫn xuất bảng công được, chỉ là cách xếp cột tạm lưu
+riêng trên từng máy.
+
 ## Sao lưu dữ liệu
 
 Vào **Hướng dẫn** → **Sao lưu dữ liệu** → **Tải file sao lưu (.json)** sau

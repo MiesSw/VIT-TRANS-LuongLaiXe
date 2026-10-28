@@ -126,30 +126,30 @@ function allowanceRateFor(type, project, capacity){
   }
   return safeNum(entry);
 }
-// Giới hạn BKS áp dụng của 1 loại phụ cấp cho 1 dự án (cấu hình ở Cấu hình ›
-// Phụ cấp › Sửa, cột "BKS áp dụng" bên cạnh "Đơn giá" — xem openTypeModal) —
-// để trống/không cấu hình nghĩa là áp dụng cho MỌI xe chạy dự án đó (không
-// giới hạn gì, giữ đúng hành vi cũ). Chỉ áp dụng cho bảng đơn giá ĐƠN GIẢN
-// (1 số/dự án) — "Theo tải trọng xe"/"theo km × tải trọng" đã tự giới hạn
-// theo tải trọng xe nên không có cột này (xem ratesTableHtml).
-function allowancePlatesFor(type, project){
-  const list = type && type.platesByProject ? type.platesByProject[project] : null;
+// Giới hạn Lái xe áp dụng của 1 loại phụ cấp cho 1 dự án (cấu hình ở Cấu
+// hình › Phụ cấp › Sửa, cột "Lái xe" bên cạnh "Đơn giá" — xem openTypeModal)
+// — để trống/không cấu hình nghĩa là áp dụng cho MỌI lái xe chạy dự án đó
+// (không giới hạn gì, giữ đúng hành vi cũ). Chỉ áp dụng cho bảng đơn giá ĐƠN
+// GIẢN (1 số/dự án) — "Theo tải trọng xe"/"theo km × tải trọng" đã tự giới
+// hạn theo tải trọng xe nên không có cột này (xem ratesTableHtml).
+function allowanceDriversFor(type, project){
+  const list = type && type.driversByProject ? type.driversByProject[project] : null;
   return (list && list.length) ? list : null;
 }
-function allowanceAppliesToPlate(type, project, plate){
-  const list = allowancePlatesFor(type, project);
-  return !list || list.includes(plate);
+function allowanceAppliesToDriver(type, project, driverCode){
+  const list = allowanceDriversFor(type, project);
+  return !list || list.includes(driverCode);
 }
 // Chuyến hợp lệ của 1 dự án để tính 1 loại phụ cấp — đã lọc "Nghỉ" + đúng dự
-// án + (nếu có giới hạn BKS) đúng xe trong danh sách BKS áp dụng. Dùng ở mọi
-// nhánh calcPhuCap cần đếm ngày công/số chuyến theo dự án (perPeriod/
-// perTrip/perDay/perOccurrence/perPeriodMinDays/perProratedMonth/
-// perOccurrenceByProject) để xe KHÔNG nằm trong BKS áp dụng không được tính
-// khoản này dù lái xe có chạy dự án đó bằng xe khác.
+// án + (nếu có giới hạn Lái xe) đúng lái xe trong danh sách Lái xe áp dụng.
+// Dùng ở mọi nhánh calcPhuCap cần đếm ngày công/số chuyến theo dự án
+// (perPeriod/perTrip/perDay/perOccurrence/perPeriodMinDays/perProratedMonth/
+// perOccurrenceByProject) để lái xe KHÔNG nằm trong danh sách áp dụng không
+// được tính khoản này dù có chạy dự án đó.
 function allowanceTripsFor(type, project, trips){
   const base = trips.filter(t=>!isOffTrip(t) && t.project===project);
-  const plates = allowancePlatesFor(type, project);
-  return plates ? base.filter(t=>plates.includes(t.plate)) : base;
+  const drivers = allowanceDriversFor(type, project);
+  return drivers ? base.filter(t=>drivers.includes(t.driverCode)) : base;
 }
 // Phụ cấp "mỗi chuyến theo km × tải trọng xe" (vd Phụ cấp ăn của NTF) — mỗi
 // dự án có 1 bảng bậc thang km × tải trọng RIÊNG (rates[project] = {tiers,
@@ -207,6 +207,7 @@ function calcMethodLabel(v){ return (CUSTOMER_CALC_METHODS.find(m=>m.v===v)||{})
 const state = {
   drivers:[], vehicles:[], routes:[], customers:[], allowanceTypes:[], allowanceConfigs:[],
   allowanceUsage:[], trips:[], deductions:[], fuelLogs:[], fuelPrices:[], periodLocks:[],
+  exportSettings:[],
 };
 let db = null;                 // lớp lưu trữ (claude db hoặc localStorage)
 let downloads = null;          // hộp thoại lưu file của claude.ai (nếu có)
@@ -931,11 +932,11 @@ function driverVehicleCapacity(driverCode){
 //     dự án chính (driverMainProject) | "theo km" -> tra theo tải trọng/km
 //     thực tế của từng chuyến, vốn đã không qua dự án cố định từ trước.
 //     Riêng 7 đơn vị "1 số/dự án" kể trên (trừ "theo km"/"theo tải trọng
-//     xe") còn có thể giới hạn CHỈ áp dụng cho vài BKS cụ thể của dự án đó
-//     (platesByProject, cấu hình ở Cấu hình › Phụ cấp › Sửa) — xem
-//     allowanceTripsFor/allowanceAppliesToPlate: để trống thì áp dụng cho
-//     mọi xe như cũ, chọn vài BKS thì chuyến/ngày công của xe KHÁC không
-//     được tính (dù cùng lái xe, cùng dự án).
+//     xe") còn có thể giới hạn CHỈ áp dụng cho vài lái xe cụ thể của dự án đó
+//     (driversByProject, cấu hình ở Cấu hình › Phụ cấp › Sửa) — xem
+//     allowanceTripsFor/allowanceAppliesToDriver: để trống thì áp dụng cho
+//     mọi lái xe như cũ, chọn vài lái xe thì chuyến/ngày công của lái xe
+//     KHÁC không được tính (dù cùng chạy dự án đó).
 function calcPhuCap(driver, trips, period){
   const capacity = driverVehicleCapacity(driver.code);
   const mainProject = driverManualProject(driver.code, trips, period);
@@ -949,7 +950,7 @@ function calcPhuCap(driver, trips, period){
   // mức đã đặt mỗi kỳ, không phụ thuộc ngày công/số chuyến.
   const seniority = safeNum(driver.seniorityAllowance);
   if(seniority>0){
-    lines.push({ name:'Phụ cấp thâm niên', target: driver.code, unit:'perPeriod', qty:1, rate:seniority, amount:seniority });
+    lines.push({ key:'b:seniority', name:'Phụ cấp thâm niên', target: driver.code, unit:'perPeriod', qty:1, rate:seniority, amount:seniority });
     total += seniority;
   }
 
@@ -959,7 +960,7 @@ function calcPhuCap(driver, trips, period){
         const rate = allowanceRateFor(at, project);
         if(rate===null) return;
         if(!allowanceTripsFor(at, project, trips).length) return;
-        lines.push({ name: `${at.name} (${project})`, target: driver.code, unit:at.unit, qty:1, rate, amount:rate });
+        lines.push({ atId: at.id, project, name: `${at.name} (${project})`, target: driver.code, unit:at.unit, qty:1, rate, amount:rate });
         total += rate;
       });
     } else if(at.unit==='perTrip'){
@@ -969,7 +970,7 @@ function calcPhuCap(driver, trips, period){
         const qty = allowanceTripsFor(at, project, trips).length;
         if(qty<=0) return;
         const amount = rate * qty;
-        lines.push({ name: `${at.name} (${project})`, target: driver.code, unit:at.unit, qty, rate, amount });
+        lines.push({ atId: at.id, project, name: `${at.name} (${project})`, target: driver.code, unit:at.unit, qty, rate, amount });
         total += amount;
       });
     } else if(at.unit==='perDay'){
@@ -979,7 +980,7 @@ function calcPhuCap(driver, trips, period){
         const days = tripDaysCount(allowanceTripsFor(at, project, trips));
         if(days<=0) return;
         const amount = rate * days;
-        lines.push({ name: `${at.name} (${project})`, target: driver.code, unit:at.unit, qty:days, rate, amount });
+        lines.push({ atId: at.id, project, name: `${at.name} (${project})`, target: driver.code, unit:at.unit, qty:days, rate, amount });
         total += amount;
       });
     } else if(at.unit==='perOccurrence'){
@@ -991,7 +992,7 @@ function calcPhuCap(driver, trips, period){
       const qty = usage ? safeNum(usage.quantity) : 0;
       if(qty<=0) return;
       const amount = rate * qty;
-      lines.push({ name: at.name, target: driver.code, unit:at.unit, qty, rate, amount });
+      lines.push({ atId: at.id, project: mainProject, name: at.name, target: driver.code, unit:at.unit, qty, rate, amount });
       total += amount;
     } else if(at.unit==='perPeriodMinDays'){
       const minDays = safeNum(at.minDays) || 15;
@@ -1004,7 +1005,7 @@ function calcPhuCap(driver, trips, period){
         if(rate===null) continue;
         const days = tripDaysCount(allowanceTripsFor(at, project, trips));
         if(days > minDays){
-          lines.push({ name: `${at.name} (${project})`, target: driver.code, unit:at.unit, qty:1, rate, amount:rate });
+          lines.push({ atId: at.id, project, name: `${at.name} (${project})`, target: driver.code, unit:at.unit, qty:1, rate, amount:rate });
           total += rate;
           if(at.onceOnly) break;
         }
@@ -1018,7 +1019,7 @@ function calcPhuCap(driver, trips, period){
         const paidDays = Math.min(days, standardDays);
         const amount = Math.round(rate * paidDays / standardDays);
         if(amount>0){
-          lines.push({ name:`${at.name} (${project})`, target: driver.code, unit:at.unit,
+          lines.push({ atId: at.id, project, name:`${at.name} (${project})`, target: driver.code, unit:at.unit,
             qty: days, rate: Math.round(rate/standardDays), amount });
           total += amount;
         }
@@ -1035,7 +1036,7 @@ function calcPhuCap(driver, trips, period){
           }
           return;
         }
-        lines.push({ name: `${at.name} (${project})`, target: driver.code, unit:at.unit, qty:1, rate, amount:rate });
+        lines.push({ atId: at.id, project, name: `${at.name} (${project})`, target: driver.code, unit:at.unit, qty:1, rate, amount:rate });
         total += rate;
       });
     } else if(at.unit==='perTripByKmCapacity'){
@@ -1047,7 +1048,7 @@ function calcPhuCap(driver, trips, period){
         if(a>0){ qty++; amount += a; }
       });
       if(amount>0){
-        lines.push({ name: at.name, target: driver.code, unit:at.unit, qty, rate: Math.round(amount/qty), amount });
+        lines.push({ atId: at.id, project: '', name: at.name, target: driver.code, unit:at.unit, qty, rate: Math.round(amount/qty), amount });
         total += amount;
       }
     } else if(at.unit==='perOccurrenceByProject'){
@@ -1062,7 +1063,7 @@ function calcPhuCap(driver, trips, period){
       const qty = usage ? safeNum(usage.quantity) : 0;
       if(qty<=0) return;
       const amount = rate * qty;
-      lines.push({ name: at.name, target: driver.code, unit:at.unit, qty, rate, amount });
+      lines.push({ atId: at.id, project: mainProject, name: at.name, target: driver.code, unit:at.unit, qty, rate, amount });
       total += amount;
     }
   });
@@ -1078,7 +1079,7 @@ function calcPhuCap(driver, trips, period){
     droppedAmount += dropped * pointDropRateFor(veh ? veh.capacity : 0);
   });
   if(droppedQty>0){
-    lines.push({ name:'Phụ cấp rớt điểm', target: driver.code, unit:'perPoint',
+    lines.push({ key:'b:pointDrop', name:'Phụ cấp rớt điểm', target: driver.code, unit:'perPoint',
       qty: droppedQty, rate: Math.round(droppedAmount/droppedQty), amount: droppedAmount });
     total += droppedAmount;
   }
@@ -1099,7 +1100,7 @@ function calcPhuCap(driver, trips, period){
   });
   const longHaulQty = longHaulResult.qty, longHaulAmount = longHaulResult.amount;
   if(longHaulQty>0){
-    lines.push({ name:'Phụ cấp đường dài (tăng cường ngoại tỉnh vượt ngưỡng km)', target: driver.code, unit:'perLongHaul',
+    lines.push({ key:'b:longHaulSurge', name:'Phụ cấp đường dài (tăng cường ngoại tỉnh vượt ngưỡng km)', target: driver.code, unit:'perLongHaul',
       qty: longHaulQty, rate: Math.round(longHaulAmount/longHaulQty), amount: longHaulAmount });
     total += longHaulAmount;
   }
@@ -1451,6 +1452,7 @@ const COLLECTIONS = {
   drivers:'drivers', vehicles:'vehicles', routes:'routes', customers:'customers', allowanceTypes:'allowanceTypes',
   allowanceConfigs:'allowanceConfigs', allowanceUsage:'allowanceUsage', trips:'trips',
   deductions:'deductions', fuelLogs:'fuelLogs', fuelPrices:'fuelPrices', periodLocks:'periodLocks',
+  exportSettings:'exportSettings',
 };
 const LOCAL_DB_KEY = 'vittrans_payroll_db_v8';
 
@@ -1739,7 +1741,7 @@ const SUPA_TABLE = {
   drivers:'drivers', vehicles:'vehicles', routes:'routes', customers:'customers',
   allowanceTypes:'allowance_types', allowanceConfigs:'allowance_configs', allowanceUsage:'allowance_usage',
   trips:'trips', deductions:'deductions', fuelLogs:'fuel_logs', fuelPrices:'fuel_prices',
-  periodLocks:'period_locks',
+  periodLocks:'period_locks', exportSettings:'export_settings',
 };
 // Khoá chính THẬT của từng bảng: 'code' (khách hàng/lái xe — khoá tự nhiên
 // có sẵn), 'id' SERIAL do Postgres tự sinh (xe/tuyến), hoặc 'id' TEXT do
@@ -1748,7 +1750,7 @@ const SUPA_TABLE = {
 const SUPA_PK = {
   customers:'code', drivers:'code', vehicles:'id', routes:'id',
   allowanceTypes:'id', allowanceConfigs:'id', allowanceUsage:'id',
-  trips:'id', deductions:'id', fuelLogs:'id', fuelPrices:'id', periodLocks:'id',
+  trips:'id', deductions:'id', fuelLogs:'id', fuelPrices:'id', periodLocks:'id', exportSettings:'id',
 };
 const SUPA_AUTO_ID = { vehicles:true, routes:true }; // Postgres tự sinh (SERIAL), KHÔNG tự đặt id phía client
 // Ánh xạ tên trường app.js (camelCase) -> tên cột Postgres (snake_case).
@@ -1767,7 +1769,7 @@ const SUPA_FIELD_MAP = {
   vehicles: { vehicleType:'vehicle_type',
     fuelManagement:'fuel_management', fuelNorm:'fuel_norm' },
   routes: { routeName:'route_name', surchargePrice:'surcharge_price' },
-  allowanceTypes: { minDays:'min_days', standardDays:'standard_days', onceOnly:'once_only', platesByProject:'plates_by_project' },
+  allowanceTypes: { minDays:'min_days', standardDays:'standard_days', onceOnly:'once_only', driversByProject:'drivers_by_project' },
   allowanceConfigs: { targetType:'target_type', targetId:'target_id', allowanceTypeId:'allowance_type_id' },
   allowanceUsage: { targetType:'target_type', targetId:'target_id', allowanceTypeId:'allowance_type_id' },
   trips: { tripCode:'trip_code', driverCode:'driver_code', kmRegion:'km_region', surgeZone:'surge_zone',
@@ -1776,6 +1778,7 @@ const SUPA_FIELD_MAP = {
   fuelLogs: { odoStart:'odo_start', odoEnd:'odo_end', stockStart:'stock_start', stockEnd:'stock_end' },
   fuelPrices: {},
   periodLocks: { lockedAt:'locked_at', lockedBy:'locked_by' },
+  exportSettings: { updatedAt:'updated_at', updatedBy:'updated_by' },
 };
 // Trường nào chuỗi rỗng '' phải đổi thành null trước khi gửi lên Postgres —
 // cột có CHECK theo danh sách giá trị (enum) không chấp nhận chuỗi rỗng,
@@ -1877,7 +1880,7 @@ function makeSupabaseDb(){
             // dòng chứa nguyên bản chụp bảng lương, khá nặng, lại hiếm khi đổi)
             // chỉ làm mới mỗi 60s; chốt/mở chốt trên máy này vẫn thấy ngay
             // nhờ refreshNow() sau mỗi lần ghi.
-            if(!stopped) setTimeout(poll, key==='periodLocks' ? 60000 : 6000);
+            if(!stopped) setTimeout(poll, (key==='periodLocks' || key==='exportSettings') ? 60000 : 6000);
           }
           poll();
           return ()=>{ stopped = true; if(refreshers[key]===doFetch) delete refreshers[key]; };
@@ -1976,7 +1979,7 @@ const SUPA_COLUMNS = {
   drivers: ['code','name','phone','driver_type','status','has_fixed_salary','fixed_salary_amount','seniority_allowance','plate'],
   vehicles: ['plate','capacity','vehicle_type','ownership','status','fuel_management','fuel_norm'],
   routes: ['project','route_name','route','price','surcharge_price'],
-  allowanceTypes: ['id','name','unit','min_days','standard_days','once_only','rates','plates_by_project'],
+  allowanceTypes: ['id','name','unit','min_days','standard_days','once_only','rates','drivers_by_project'],
   allowanceConfigs: ['id','target_type','target_id','allowance_type_id'],
   allowanceUsage: ['id','target_type','target_id','allowance_type_id','period','quantity'],
   trips: ['id','date','trip_code','driver_code','plate','project','route','origin','destination','km',
@@ -1985,8 +1988,9 @@ const SUPA_COLUMNS = {
   fuelLogs: ['id','plate','period','odo_start','odo_end','stock_start','purchased','stock_end'],
   fuelPrices: ['id','period','price'],
   periodLocks: ['id','period','locked_at','locked_by','rows'],
+  exportSettings: ['id','mapping','updated_at','updated_by'],
 };
-const SUPA_JSONB_COLS = { customers:['km_regions'], allowanceTypes:['rates','plates_by_project'], periodLocks:['rows'] };
+const SUPA_JSONB_COLS = { customers:['km_regions'], allowanceTypes:['rates','drivers_by_project'], periodLocks:['rows'], exportSettings:['mapping'] };
 // Giá trị mặc định cho các cột NOT NULL DEFAULT ... trong supabase_setup.sql
 // — dữ liệu cũ nhập từ trước khi các trường này tồn tại trong app (vd
 // kmRegion/loadingCount thêm sau) sẽ không có field này, để undefined thì
@@ -2005,7 +2009,7 @@ const SUPA_NOT_NULL_DEFAULTS = {
 // "drivers" (drivers.plate tham chiếu vehicles.plate — lái xe chọn xe phụ
 // trách, không phải chiều ngược lại như trước).
 const SUPA_INSERT_ORDER = ['customers','vehicles','drivers','routes','allowanceTypes',
-  'allowanceConfigs','allowanceUsage','trips','deductions','fuelLogs','fuelPrices','periodLocks'];
+  'allowanceConfigs','allowanceUsage','trips','deductions','fuelLogs','fuelPrices','periodLocks','exportSettings'];
 // CHÚ Ý: '' (chuỗi rỗng) KHÔNG được coi là NULL ở đây — nhiều cột như
 // trips.route/origin/destination/km_region là NOT NULL DEFAULT '', chèn
 // NULL vào sẽ làm INSERT thất bại. Cột nào cần NULL thay vì '' (vd
@@ -2190,6 +2194,7 @@ const NAV = [
       {id:'cfg-customers', label:'Khách hàng', icon:'fa-building'},
       {id:'cfg-routes', label:'Lương theo tuyến', icon:'fa-route'},
       {id:'cfg-allowance', label:'Phụ cấp', icon:'fa-hand-holding-dollar'},
+      {id:'cfg-bangcong', label:'Mẫu bảng công', icon:'fa-table-columns'},
       {id:'cfg-users', label:'Người dùng', icon:'fa-user-gear', adminOnly:true},
   ]},
   { group:null, items:[ {id:'guide', label:'Hướng dẫn sử dụng', icon:'fa-circle-question'} ] },
@@ -2233,12 +2238,14 @@ const SECTIONS = {
   'cfg-customers':{ render: renderCustomers,       bind: bindCustomers },
   'cfg-routes':   { render: renderRoutes,          bind: bindRoutes },
   'cfg-allowance':{ render: renderAllowanceConfig, bind: bindAllowanceConfig },
+  'cfg-bangcong': { render: renderBangCongConfig,  bind: bindBangCongConfig },
   'cfg-users':    { render: renderUsers,           bind: bindUsers },
   guide:          { render: renderGuide,           bind: bindGuide },
 };
 
 let renderQueued = false;
 function scheduleRender(){
+  if(bcDragActive){ bcRenderPending = true; return; }
   if(renderQueued) return;
   renderQueued = true;
   requestAnimationFrame(()=>{ renderQueued = false; render(); });
@@ -2857,6 +2864,7 @@ function renderPayroll(){
           ? `<button class="btn" data-act="unlock-period">Mở chốt kỳ</button>`
           : `<button class="btn" data-act="lock-period"${storageErrors.periodLocks?` title="${esc('Database chưa có bảng Chốt kỳ — chạy file '+DB_UPGRADE_FILE)}"`:''}>Chốt kỳ này</button>`}
         <button class="btn" data-act="export-csv">Xuất CSV</button>
+        <button class="btn" data-act="export-bangcong" title="Mỗi lái xe 1 sheet theo mẫu bảng công — xếp cột ở Cấu hình › Mẫu bảng công">Xuất bảng công lái xe</button>
         <button class="btn primary" data-act="export-xlsx">Xuất Excel (.xlsx)</button>
       </div>
     </div>
@@ -3087,6 +3095,8 @@ function bindPayroll(){
   if(collapseAll) collapseAll.onclick = ()=>{ expandedRows.clear(); render(); };
   document.querySelector('[data-act="export-csv"]').onclick = exportPayrollCsv;
   document.querySelector('[data-act="export-xlsx"]').onclick = exportPayrollXlsx;
+  const bangCongBtn = document.querySelector('[data-act="export-bangcong"]');
+  if(bangCongBtn) bangCongBtn.onclick = exportBangCong;
   const lockBtn = document.querySelector('[data-act="lock-period"]');
   if(lockBtn) lockBtn.onclick = ()=>lockPeriod(appPeriod);
   const unlockBtn = document.querySelector('[data-act="unlock-period"]');
@@ -3233,6 +3243,586 @@ function exportPayrollXlsx(){
 }
 
 /* =========================================================================
+   BẢNG CÔNG LÁI XE — xuất Excel theo đúng mẫu công ty, mỗi lái xe 1 sheet
+   (tên sheet = họ tên lái xe). Nút "Xuất bảng công lái xe" ở Bảng lương.
+   -------------------------------------------------------------------------
+   Bố cục mỗi sheet (theo file mẫu "file mẫu xuất lương lái xe", đã bỏ cột
+   "Ngày xong" theo yêu cầu người dùng ngày 2026-10-28):
+     - Bảng theo ngày: mỗi chuyến (Lịch lái xe) 1 dòng, xếp theo ngày — các
+       cột thông tin (Ngày, BKS, Lái xe, Trạng thái, Dự án, Tuyến, Chi tiết,
+       Km) + 9 cột tiền tính theo chuyến/ngày (BC_DAILY_SLOTS).
+     - Dòng "Cộng theo ngày" cộng từng cột tiền.
+     - Dưới bảng: mỗi khoản chỉ có 1 lần/kỳ ghi 1 dòng riêng
+       (BC_MONTHLY_SLOTS — Phụ cấp điện thoại → Dầu chạy tiết kiệm), rồi các
+       khoản chưa xếp cột nào ("Phụ cấp khác"), cuối cùng dòng TỔNG LƯƠNG.
+   Khoản nào vào cột nào do người dùng tự KÉO THẢ ở Cấu hình › Mẫu bảng công
+   (lưu chung mọi tài khoản ở bảng "export_settings"); nhiều khoản cùng 1 cột
+   thì cộng lại. Khoản chưa từng được xếp tự gợi ý cột theo TÊN
+   (bcDefaultSlotForName); khoản xếp vào "Chưa xếp" vẫn được xuất ở dòng
+   "Phụ cấp khác" để TỔNG LƯƠNG luôn bằng đúng "Tổng thu nhập" ở Bảng lương
+   (chưa trừ Khấu trừ — mẫu không có cột khấu trừ).
+   Số tiền mỗi khoản luôn lấy ĐÚNG số Bảng lương đã tính (kể cả kỳ đã chốt —
+   đọc bản chụp lúc chốt), chỉ CHIA về từng dòng chuyến/ngày để ghi vào bảng
+   theo ngày (bcAllocate) — không tính lại lương theo cách khác.
+   ========================================================================= */
+const BC_DAILY_SLOTS = [
+  {k:'base',         l:'Lương cơ bản/ Lương trực'},
+  {k:'trip',         l:'Lương chuyến'},
+  {k:'point',        l:'Lương điểm'},
+  {k:'meal',         l:'Tiền ăn'},
+  {k:'loading',      l:'Bốc xếp'},
+  {k:'loadingHired', l:'Bốc xếp thuê'},
+  {k:'waiting',      l:'Chờ giờ'},
+  {k:'nightMeal',    l:'Ăn đêm'},
+  {k:'overnight',    l:'Hỗ trợ qua đêm'},
+];
+const BC_MONTHLY_SLOTS = [
+  {k:'phone',         l:'Phụ cấp điện thoại'},
+  {k:'seniority',     l:'Thâm niên'},
+  {k:'carCare',       l:'Khoán chi phí bảo quản xe'},
+  {k:'parking',       l:'Tiền gửi xe'},
+  {k:'referral',      l:'Thưởng giới thiệu lái xe'},
+  {k:'backpay',       l:'Truy thu/Truy lĩnh'},
+  {k:'parkingTicket', l:'Vé gửi xe'},
+  {k:'fuel',          l:'Dầu chạy tiết kiệm'},
+];
+const BC_INFO_HEADERS = ['Ngày','BKS','Lái xe','Trạng thái','Dự án','Tuyến','Chi tiết','Km'];
+// Độ rộng cột lấy theo đúng file mẫu (đã bỏ cột "Ngày xong").
+const BC_COL_WIDTHS = [12.1, 13.3, 24, 12.2, 14.7, 23.9, 47.9, 8.3, 15.6, 12.8, 11.8, 12.9, 13.3, 14.9, 13.4, 12.9, 12.7];
+const BC_SETTINGS_ID = 'bangcong';
+const BC_LOCAL_KEY = 'vittrans_bangcong_mapping'; // dự phòng khi database chưa có bảng export_settings
+const BC_UPGRADE_FILE = 'nang_cap_2026-10-28_mau_bang_cong.sql';
+const EXCELJS_URL = 'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js';
+// Cột "Tuyến" = "Tên tuyến" ở Lương theo tuyến; riêng các khách hàng dưới
+// đây luôn ghi 1 tên cố định (yêu cầu người dùng ngày 2026-10-28: NTF luôn
+// là "Kho Nutifood Hưng Yên" — NTF tính theo km nên chuyến thường không có
+// Tên tuyến).
+const BC_FIXED_ROUTE_NAME = { NTF: 'Kho Nutifood Hưng Yên' };
+const BC_MONEY_FMT = '_(* #,##0_);_(* \\(#,##0\\);_(* "-"_);_(@_)';
+
+// Các khoản app tự tính (không phải "Loại phụ cấp" ở Cấu hình › Phụ cấp) —
+// cũng kéo thả được như phụ cấp; "def" là cột đặt sẵn theo đúng file mẫu.
+const BC_BUILTIN_ITEMS = [
+  {key:'b:trip',          name:'Lương chuyến (gồm Tăng cường)', hint:'Đơn giá từng chuyến', def:'trip'},
+  {key:'b:fixed',         name:'Lương cứng theo ngày công', hint:'Hồ sơ lái xe › Lương cứng', def:'base'},
+  {key:'b:standby',       name:'Lương trực', hint:'Ngày có dòng Trực', def:'base'},
+  {key:'b:longHaulDay',   name:'Phụ cấp đường dài theo ngày chạy trọn khách', hint:'Khách Theo km', def:'base'},
+  {key:'b:pointDrop',     name:'Phụ cấp rớt điểm', hint:'Từ điểm giao thứ 2', def:'point'},
+  {key:'b:longHaulSurge', name:'Phụ cấp đường dài (tăng cường ngoại tỉnh vượt km)', hint:'Khách Theo km', def:''},
+  {key:'b:seniority',     name:'Phụ cấp thâm niên', hint:'Hồ sơ lái xe', def:'seniority'},
+  {key:'b:fuel',          name:'Thưởng/phạt nhiên liệu', hint:'Mục Nhiên liệu (xe khoán dầu)', def:'fuel'},
+];
+function bcAllSlots(){ return BC_DAILY_SLOTS.concat(BC_MONTHLY_SLOTS); }
+function bcSlotLabel(k){ const s = bcAllSlots().find(x=>x.k===k); return s ? s.l : ''; }
+function bcIsDailySlot(k){ return BC_DAILY_SLOTS.some(x=>x.k===k); }
+function bcIsSlot(k){ return bcAllSlots().some(x=>x.k===k); }
+// Cột gợi ý theo TÊN loại phụ cấp — chỉ dùng cho khoản CHƯA từng được kéo
+// thả (người dùng kéo rồi thì luôn theo đúng chỗ đã kéo). Thứ tự xét quan
+// trọng: "Bốc xếp thuê" trước "Bốc xếp", "Vé gửi xe" trước "Gửi xe", "Ăn
+// đêm" trước "ăn".
+function bcDefaultSlotForName(name){
+  const n = ' ' + String(name||'').normalize('NFC').toLowerCase() + ' ';
+  if(/bốc xếp thuê/.test(n)) return 'loadingHired';
+  if(/bốc xếp/.test(n)) return 'loading';
+  if(/vé gửi/.test(n)) return 'parkingTicket';
+  if(/gửi xe/.test(n)) return 'parking';
+  if(/bảo quản/.test(n)) return 'carCare';
+  if(/điện thoại/.test(n)) return 'phone';
+  if(/thâm niên/.test(n)) return 'seniority';
+  if(/giới thiệu/.test(n)) return 'referral';
+  if(/truy thu|truy lĩnh/.test(n)) return 'backpay';
+  if(/qua đêm|lưu trú/.test(n)) return 'overnight';
+  if(/ăn đêm/.test(n)) return 'nightMeal';
+  if(/chờ/.test(n)) return 'waiting';
+  if(/[\s(]ăn[\s)]/.test(n)) return 'meal';
+  return '';
+}
+// Danh sách mọi khoản kéo thả được: khoản app tự tính + mọi Loại phụ cấp.
+function bcItems(){
+  const items = BC_BUILTIN_ITEMS.map(b=>({ key:b.key, name:b.name, hint:b.hint, def:b.def, builtin:true }));
+  [...state.allowanceTypes].sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''), 'vi')).forEach(at=>{
+    items.push({ key:'at:'+at.id, name: at.name || '(chưa đặt tên)', hint: unitLabel(at.unit), def: bcDefaultSlotForName(at.name) });
+  });
+  return items;
+}
+
+/* ---------------- Lưu cách xếp cột (dùng chung mọi tài khoản) ---------------- */
+function bcSettingsDoc(){ return (state.exportSettings||[]).find(d=>d.id===BC_SETTINGS_ID) || null; }
+let bcPendingMapping = null;   // vừa kéo thả, chưa lưu xong — hiện ngay, không chờ database
+let bcSaveTimer = null;
+// "var" (không dùng let) vì scheduleRender() — khai báo ở trên — đọc 2 biến
+// này; tránh lỗi "chưa khởi tạo" nếu có lần vẽ nào chạy sớm lúc nạp file.
+var bcDragActive = false;      // đang kéo 1 khoản — hoãn vẽ lại trang (xem scheduleRender)
+var bcRenderPending = false;
+function bcStoredMapping(){
+  if(bcPendingMapping) return bcPendingMapping;
+  const doc = bcSettingsDoc();
+  if(doc && doc.mapping && typeof doc.mapping==='object') return doc.mapping;
+  // Database chưa chạy file nâng cấp (chưa có bảng export_settings) — đọc
+  // bản tạm lưu trên máy này.
+  if(storageErrors.exportSettings){ try{ return JSON.parse(localStorage.getItem(BC_LOCAL_KEY)) || {}; }catch(e){ return {}; } }
+  return {};
+}
+function bcSlotOf(item, mapping){
+  const m = mapping || bcStoredMapping();
+  if(Object.prototype.hasOwnProperty.call(m, item.key)){ const v = m[item.key]; return bcIsSlot(v) ? v : ''; }
+  return item.def || '';
+}
+function bcSetSlot(itemKey, slot){
+  const next = Object.assign({}, bcStoredMapping(), { [itemKey]: bcIsSlot(slot) ? slot : '' });
+  bcPendingMapping = next;
+  clearTimeout(bcSaveTimer);
+  bcSaveTimer = setTimeout(()=>bcSaveMapping(next), 400);
+  render();
+}
+async function bcSaveMapping(mapping){
+  const payload = { mapping, updatedAt: new Date().toISOString(), updatedBy: (SUPABASE_ENABLED && Auth.currentEmail()) || '' };
+  let saved = false;
+  try{
+    if(storageErrors.exportSettings) throw new Error('no-table');
+    const doc = bcSettingsDoc();
+    if(doc) await updateDoc('exportSettings', BC_SETTINGS_ID, payload);
+    else if(storageMode==='supabase') await addDoc('exportSettings', Object.assign({ id: BC_SETTINGS_ID }, payload));
+    else await setDoc('exportSettings', BC_SETTINGS_ID, payload);
+    saved = true;
+  }catch(e){
+    try{ localStorage.setItem(BC_LOCAL_KEY, JSON.stringify(mapping)); }catch(_){}
+    if(e && e.message==='no-table') saved = true; // đã tạm lưu máy này, màn hình đã báo cần nâng cấp database
+    else toast('Chưa lưu được cách xếp cột lên database: '+((e&&e.message)||e)+' — đang giữ tạm trên máy này.', 'danger');
+  }
+  if(saved && bcPendingMapping===mapping){ bcPendingMapping = null; scheduleRender(); }
+}
+
+/* ---------------- Chia số tiền về từng dòng chuyến ---------------- */
+// target = số tiền THẬT của 1 khoản (đúng số Bảng lương). entries = cách
+// chia tham khảo [{tripId, amount}] theo từng chuyến/ngày. Lệch vài đồng do
+// làm tròn (VD Lương trực: mức tháng/28 làm tròn 1 lần trên tổng) dồn vào
+// dòng cuối; lệch nhiều (cấu hình đã đổi sau khi chốt kỳ) thì chia lại theo
+// tỷ lệ — tổng các dòng LUÔN bằng đúng target.
+function bcAllocate(target, entries){
+  const total = safeNum(target);
+  if(!total) return [];
+  const list = (entries||[]).filter(e=>e && e.tripId && safeNum(e.amount)!==0).map(e=>({ tripId:e.tripId, amount:safeNum(e.amount) }));
+  if(!list.length) return [{ tripId:null, amount: total }];
+  const sum = list.reduce((s,e)=>s+e.amount, 0);
+  const diff = total - sum;
+  if(Math.abs(diff) > list.length + 0.5){
+    if(!sum) return [{ tripId:null, amount: total }];
+    let acc = 0;
+    list.forEach((e,i)=>{
+      if(i<list.length-1){ e.amount = Math.round(total*e.amount/sum); acc += e.amount; }
+      else e.amount = total - acc;
+    });
+  }else{
+    list[list.length-1].amount += diff;
+  }
+  return list;
+}
+function bcSortTrips(trips){
+  return [...(trips||[])].sort((a,b)=>String(a.date).localeCompare(String(b.date))
+    || String(a.tripCode||'').localeCompare(String(b.tripCode||'')) || String(a.id).localeCompare(String(b.id)));
+}
+// Dòng đại diện của 1 ngày để ghi khoản tính theo ngày (Lương trực, Lương
+// cứng, Tiền ăn theo ngày…) — đúng dự án nếu có, ưu tiên dòng chuyến chính
+// (không phải Trả điểm/Nghỉ).
+function bcDayAnchor(trips, date, project){
+  const sameDay = trips.filter(t=>t.date===date);
+  const pick = list => list.find(t=>!isOffTrip(t) && tripTypeOf(t)!=='point') || list.find(t=>!isOffTrip(t)) || list[0] || null;
+  if(project){ const p = sameDay.filter(t=>t.project===project); if(p.length) return pick(p); }
+  return pick(sameDay);
+}
+function bcBaseLineName(name){ return String(name||'').replace(/\s*\([^()]*\)\s*$/, '').trim(); }
+function bcAllowanceTypeByLineName(name){
+  const n = String(name||'');
+  let best = null;
+  state.allowanceTypes.forEach(at=>{
+    const an = String(at.name||'');
+    if(an && (n===an || n.startsWith(an+' (')) && (!best || an.length>String(best.name).length)) best = at;
+  });
+  return best;
+}
+// Khoản (key kéo thả) của 1 dòng phụ cấp ở Bảng lương. Dòng từ bản chốt kỳ
+// cũ (trước khi calcPhuCap ghi kèm atId/key) thì khớp theo tên.
+function bcLineItemKey(line){
+  if(line.key) return line.key;
+  if(line.unit==='perPoint') return 'b:pointDrop';
+  if(line.unit==='perLongHaul') return 'b:longHaulSurge';
+  if(line.atId) return 'at:'+line.atId;
+  if(line.name==='Phụ cấp thâm niên') return 'b:seniority';
+  const at = bcAllowanceTypeByLineName(line.name);
+  return at ? 'at:'+at.id : 'x:'+bcBaseLineName(line.name);
+}
+function bcLineProject(line){
+  if(line.project!==undefined) return line.project || '';
+  const m = /\(([^()]*)\)\s*$/.exec(String(line.name||''));
+  return m && customerByCode(m[1]) ? m[1] : '';
+}
+// Cách chia tham khảo của 1 dòng phụ cấp về từng chuyến/ngày, theo đúng
+// cách calcPhuCap đã đếm (Theo chuyến: mỗi chuyến hợp lệ; Theo ngày công /
+// tỷ lệ ngày công: mỗi ngày; km × tải trọng: từng chuyến). Khoản cả kỳ
+// (cố định theo kỳ, vượt công tối thiểu, theo tải trọng, nhập tay…) ghi
+// nguyên vào chuyến đầu tiên của dự án đó.
+function bcLineEntries(line, key, trips){
+  const project = bcLineProject(line);
+  const whole = ()=>{
+    const t = (project && trips.find(x=>x.project===project && !isOffTrip(x))) || trips.find(x=>!isOffTrip(x)) || trips[0] || null;
+    return [{ tripId: t ? t.id : null, amount: line.amount }];
+  };
+  if(key==='b:pointDrop'){
+    return calcPointDropGroups(trips).map(({trip, dropped})=>{
+      const veh = vehicleByPlate(trip.plate);
+      return { tripId: trip.id, amount: dropped * pointDropRateFor(veh ? veh.capacity : 0) };
+    });
+  }
+  if(key==='b:longHaulSurge'){
+    const fullDays = new Set(fullDayLongHaulDayTrips(trips).map(t=>t.date));
+    return trips.filter(t=>!fullDays.has(t.date) && isLongHaulSurgeTrip(t)).map(t=>{
+      const cust = customerByCode(t.project), veh = vehicleByPlate(t.plate);
+      const monthly = cust ? longHaulMonthlyAmount(cust, veh ? veh.capacity : 0) : 0;
+      return { tripId: t.id, amount: monthly ? Math.round(monthly / LONG_HAUL_STANDARD_DAYS) : 0 };
+    });
+  }
+  if(!key.startsWith('at:')) return whole();
+  const at = state.allowanceTypes.find(a=>'at:'+a.id===key);
+  if(!at) return whole();
+  if(at.unit==='perTripByKmCapacity') return trips.map(t=>({ tripId: t.id, amount: tripAllowanceByKmCapacity(at, t) }));
+  if(!project) return whole();
+  const pTrips = allowanceTripsFor(at, project, trips);
+  const rate = safeNum(line.rate);
+  if(at.unit==='perTrip') return pTrips.map(t=>({ tripId: t.id, amount: rate }));
+  if(at.unit==='perDay' || at.unit==='perProratedMonth'){
+    const dates = distinct(pTrips.map(t=>t.date)).sort();
+    const limit = at.unit==='perProratedMonth' ? (safeNum(at.standardDays) || 26) : dates.length;
+    return dates.slice(0, limit).map(d=>{ const t = bcDayAnchor(pTrips, d, project); return { tripId: t ? t.id : null, amount: rate }; });
+  }
+  return whole();
+}
+// Mọi khoản tiền của 1 lái xe (1 dòng Bảng lương — tính trực tiếp hoặc bản
+// đã chốt), đã chia về từng chuyến: [{itemKey, tripId|null, amount}]. Cộng
+// hết = đúng "Tổng thu nhập" của lái xe ở Bảng lương.
+function bcDriverAllocations(r, trips){
+  const allocs = [];
+  const push = (itemKey, list)=>list.forEach(a=>{ if(safeNum(a.amount)) allocs.push({ itemKey, tripId:a.tripId, amount:safeNum(a.amount) }); });
+  // Lương chuyến: đúng đơn giá từng chuyến (kỳ đã chốt dùng đơn giá lúc chốt).
+  push('b:trip', trips.filter(t=>tripTypeOf(t)!=='point').map(t=>({
+    tripId: t.id, amount: safeNum(t._price!==undefined ? t._price : tripUnitPrice(t)),
+  })));
+  // Lương cố định = Lương cứng theo ngày công + Lương trực + Phụ cấp đường dài theo ngày.
+  const info = r.coDinhInfo || {};
+  // anchorType: ghi đúng vào dòng có Loại đó trong ngày (Lương trực → dòng
+  // "Trực", kể cả khi cùng ngày còn chuyến khác của cùng khách hàng).
+  const byDay = (lines, target, anchorType)=>bcAllocate(target, (lines||[]).map(l=>{
+    const own = anchorType ? trips.find(t=>t.date===l.date && t.project===l.project && tripTypeOf(t)===anchorType) : null;
+    const t = own || bcDayAnchor(trips, l.date, l.project);
+    return { tripId: t ? t.id : null, amount: l.amount };
+  }));
+  push('b:fixed', byDay((info.workDayLines||[]).filter(l=>l.paid!==false), info.base));
+  push('b:standby', byDay(info.standbyLines, info.standbyAmount, 'standby'));
+  push('b:longHaulDay', byDay(info.ntfDayLines, info.ntfDayAmount));
+  (r.phuCapLines||[]).forEach(line=>{
+    const key = bcLineItemKey(line);
+    push(key, bcAllocate(line.amount, bcLineEntries(line, key, trips)));
+  });
+  if(safeNum(r.thuong)) push('b:fuel', [{ tripId:null, amount: Math.round(safeNum(r.thuong)) }]);
+  return allocs;
+}
+// Thông tin các cột chữ của 1 dòng chuyến.
+function bcTripInfo(t, driverName){
+  const type = tripTypeOf(t);
+  const cust = customerByCode(t.project);
+  const method = cust ? cust.calcMethod : 'route';
+  const route = t.route ? findRoute(t.project, t.route) : null;
+  const fixedName = BC_FIXED_ROUTE_NAME[String(t.project||'').toUpperCase()];
+  const tuyen = fixedName || (route && route.routeName) || '';
+  const od = (t.origin && t.destination) ? `${t.origin} → ${t.destination}` : (t.destination || t.origin || '');
+  let detail;
+  if(type==='standby') detail = 'Trực';
+  else if(type==='off') detail = 'Nghỉ';
+  else if(method==='km' && !route) detail = t.destination || t.route || od;
+  else detail = t.route || od;
+  return {
+    date: t.date, plate: t.plate || '', driver: driverName || t.driverCode || '',
+    status: (type==='standby' || type==='off') ? '' : tripTypeLabel(type),
+    project: t.project || '', tuyen, detail,
+    km: (t.km===null || t.km===undefined || t.km==='') ? null : safeNum(t.km),
+    offOrStandby: type==='standby' || type==='off',
+  };
+}
+// Dữ liệu 1 sheet bảng công của 1 lái xe theo cách xếp cột "mapping".
+function bcSheetData(r, mapping){
+  const trips = bcSortTrips(r.trips);
+  const allocs = bcDriverAllocations(r, trips);
+  const itemsByKey = {};
+  bcItems().forEach(it=>{ itemsByKey[it.key] = it; });
+  const slotOfKey = key=>itemsByKey[key] ? bcSlotOf(itemsByKey[key], mapping) : '';
+  const nameOfKey = key=>itemsByKey[key] ? itemsByKey[key].name : (key.startsWith('x:') ? key.slice(2) : key);
+  const rows = trips.map(t=>({ trip:t, info: bcTripInfo(t, r.driver && r.driver.name), money:{} }));
+  const rowById = {};
+  rows.forEach(x=>{ rowById[x.trip.id] = x; });
+  const monthly = {};
+  BC_MONTHLY_SLOTS.forEach(s=>{ monthly[s.k] = 0; });
+  const others = {};
+  allocs.forEach(a=>{
+    const slot = slotOfKey(a.itemKey);
+    if(slot && bcIsDailySlot(slot)){
+      const row = (a.tripId && rowById[a.tripId]) || rows[0];
+      if(row){ row.money[slot] = (row.money[slot]||0) + a.amount; return; }
+    }else if(slot){ monthly[slot] += a.amount; return; }
+    others[a.itemKey] = (others[a.itemKey]||0) + a.amount;
+  });
+  const otherLines = Object.keys(others).filter(k=>Math.round(others[k])!==0)
+    .map(k=>({ key:k, name: nameOfKey(k), amount: others[k] }));
+  const dailyTotals = {};
+  BC_DAILY_SLOTS.forEach(s=>{ dailyTotals[s.k] = rows.reduce((acc,x)=>acc + (x.money[s.k]||0), 0); });
+  const dailySum = Object.values(dailyTotals).reduce((a,b)=>a+b, 0);
+  const total = dailySum + Object.values(monthly).reduce((a,b)=>a+b, 0) + otherLines.reduce((a,b)=>a+b.amount, 0);
+  return { rows, monthly, otherLines, dailyTotals, dailySum, total };
+}
+
+/* ---------------- Xuất file Excel ---------------- */
+// Thư viện ExcelJS (giữ được font/viền/màu như file mẫu — SheetJS bản miễn
+// phí đang dùng cho các file khác không ghi được định dạng) chỉ tải khi bấm
+// xuất lần đầu, không làm chậm lúc mở app.
+let bcExcelJsPromise = null;
+function bcLoadExcelJS(){
+  if(window.ExcelJS) return Promise.resolve(window.ExcelJS);
+  if(!bcExcelJsPromise){
+    bcExcelJsPromise = new Promise((resolve, reject)=>{
+      const s = document.createElement('script');
+      s.src = EXCELJS_URL; s.async = true;
+      s.onload = ()=>window.ExcelJS ? resolve(window.ExcelJS) : reject(new Error('Thư viện xuất Excel tải không đúng.'));
+      s.onerror = ()=>{ bcExcelJsPromise = null; reject(new Error('Không tải được thư viện xuất Excel — kiểm tra kết nối mạng rồi thử lại.')); };
+      document.head.appendChild(s);
+    });
+  }
+  return bcExcelJsPromise;
+}
+function bcSheetName(name, used){
+  const base = String(name||'').replace(/[\[\]:*?\/\\]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 31) || 'Lái xe';
+  let n = base, i = 2;
+  while(used.has(n.toLowerCase())){ const suf = ` (${i++})`; n = base.slice(0, 31 - suf.length) + suf; }
+  used.add(n.toLowerCase());
+  return n;
+}
+function bcExcelDate(iso){
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso||''));
+  return m ? new Date(Date.UTC(+m[1], +m[2]-1, +m[3])) : (iso || '');
+}
+function bcColLetter(n){ let s = ''; while(n>0){ const m = (n-1) % 26; s = String.fromCharCode(65+m) + s; n = Math.floor((n-1)/26); } return s; }
+function bcWriteSheet(ws, d){
+  const font = { name:'Times New Roman', size:11 };
+  const thin = { style:'thin' };
+  const border = { top:thin, left:thin, bottom:thin, right:thin };
+  const headers = BC_INFO_HEADERS.concat(BC_DAILY_SLOTS.map(s=>s.l));
+  const firstMoney = BC_INFO_HEADERS.length + 1;          // cột I
+  const lastMoney = headers.length;                        // cột Q
+  const L = bcColLetter;
+  ws.columns = headers.map((h,i)=>({ width: BC_COL_WIDTHS[i] || 13 }));
+  const style = (cell, extra)=>{ cell.font = Object.assign({}, font, extra && extra.font); cell.border = border; if(extra && extra.numFmt) cell.numFmt = extra.numFmt; if(extra && extra.alignment) cell.alignment = extra.alignment; if(extra && extra.fill) cell.fill = extra.fill; };
+  const yellow = { type:'pattern', pattern:'solid', fgColor:{ argb:'FFFFFF00' } };
+  const gray = { type:'pattern', pattern:'solid', fgColor:{ argb:'FFF2F2F2' } };
+
+  const head = ws.getRow(1);
+  headers.forEach((h,i)=>{ const c = head.getCell(i+1); c.value = h; style(c, { font:{bold:true}, alignment:{ horizontal:'center', vertical:'middle', wrapText:true } }); });
+  head.height = 48;
+
+  let r = 2;
+  d.rows.forEach(x=>{
+    const row = ws.getRow(r);
+    const info = x.info;
+    [bcExcelDate(info.date), info.plate, info.driver, info.status, info.project, info.tuyen, info.detail, info.km].forEach((v,i)=>{
+      const c = row.getCell(i+1);
+      c.value = (v===null || v===undefined || v==='') ? null : v;
+      style(c, {
+        numFmt: i===0 ? 'dd/mm/yyyy' : (i===7 ? BC_MONEY_FMT : undefined),
+        alignment: i===0 ? { horizontal:'center' } : (i===6 ? { wrapText:true, vertical:'top' } : undefined),
+        fill: info.offOrStandby ? gray : undefined,
+      });
+    });
+    BC_DAILY_SLOTS.forEach((s,i)=>{
+      const c = row.getCell(firstMoney + i);
+      const v = x.money[s.k];
+      c.value = v ? v : null;
+      style(c, { numFmt: BC_MONEY_FMT, fill: info.offOrStandby ? gray : undefined });
+    });
+    r++;
+  });
+  const lastDataRow = r - 1;
+
+  // Dòng cộng từng cột tiền theo ngày
+  const totRow = ws.getRow(r);
+  ws.mergeCells(r, 1, r, BC_INFO_HEADERS.length);
+  totRow.getCell(1).value = 'Cộng theo ngày';
+  for(let i=1; i<=BC_INFO_HEADERS.length; i++) style(totRow.getCell(i), { font:{bold:true}, alignment:{ horizontal:'center' } });
+  BC_DAILY_SLOTS.forEach((s,i)=>{
+    const col = firstMoney + i, c = totRow.getCell(col);
+    c.value = lastDataRow>=2 ? { formula:`SUM(${L(col)}2:${L(col)}${lastDataRow})`, result: d.dailyTotals[s.k] } : 0;
+    style(c, { font:{bold:true}, numFmt: BC_MONEY_FMT });
+  });
+  const totRowIdx = r;
+  r += 2;
+
+  // Khối dưới bảng: mỗi khoản 1 dòng, rồi TỔNG LƯƠNG
+  const labelEnd = firstMoney - 1;
+  const summaryLine = (label, value, opts)=>{
+    const row = ws.getRow(r);
+    ws.mergeCells(r, 1, r, labelEnd);
+    row.getCell(1).value = label;
+    for(let i=1; i<=labelEnd; i++) style(row.getCell(i), { font: opts && opts.font, fill: opts && opts.fill, alignment:{ vertical:'middle' } });
+    const c = row.getCell(firstMoney);
+    c.value = value;
+    style(c, { font: opts && opts.font, fill: opts && opts.fill, numFmt: BC_MONEY_FMT });
+    if(opts && opts.height) row.height = opts.height;
+    return r++;
+  };
+  const firstSummary = summaryLine('Cộng các khoản theo ngày',
+    { formula:`SUM(${L(firstMoney)}${totRowIdx}:${L(lastMoney)}${totRowIdx})`, result: d.dailySum }, { font:{bold:true} });
+  BC_MONTHLY_SLOTS.forEach(s=>summaryLine('- ' + s.l, d.monthly[s.k] ? d.monthly[s.k] : 0));
+  d.otherLines.forEach(o=>summaryLine('- Phụ cấp khác: ' + o.name, o.amount));
+  const lastSummary = r - 1;
+  summaryLine('TỔNG LƯƠNG', { formula:`SUM(${L(firstMoney)}${firstSummary}:${L(firstMoney)}${lastSummary})`, result: d.total },
+    { font:{ bold:true, size:14 }, fill: yellow, height: 24 });
+
+  ws.views = [{ state:'frozen', ySplit:1 }];
+  ws.pageSetup = { orientation:'landscape', paperSize:9, fitToPage:true, fitToWidth:1, fitToHeight:0 };
+}
+// Lái xe có ít nhất 1 chuyến hoặc có tiền trong kỳ (bỏ lái xe không phát sinh gì).
+function bcExportRows(){
+  return filteredPayrollRows(appPeriod).filter(r=>(r.trips||[]).length || Math.round(safeNum(r.tongThuNhap)));
+}
+async function exportBangCong(){
+  const rows = bcExportRows();
+  if(!rows.length){ toast('Không có lái xe nào có chuyến hoặc thu nhập trong kỳ đang xem (theo bộ lọc hiện tại).', 'danger'); return; }
+  if(!confirmExportWithWarnings()) return;
+  let ExcelJS;
+  try{ ExcelJS = await bcLoadExcelJS(); }catch(e){ toast((e && e.message) || String(e), 'danger'); return; }
+  try{
+    const mapping = bcStoredMapping();
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'VIT TRANS — Lương lái xe';
+    wb.created = new Date();
+    // Excel tự tính lại mọi công thức (dòng cộng, TỔNG LƯƠNG) khi mở file.
+    wb.calcProperties.fullCalcOnLoad = true;
+    const used = new Set();
+    rows.forEach(r=>{
+      const ws = wb.addWorksheet(bcSheetName(r.driver && r.driver.name, used));
+      bcWriteSheet(ws, bcSheetData(r, mapping));
+    });
+    const buf = await wb.xlsx.writeBuffer();
+    const single = rows.length===1 ? '_' + String(rows[0].driver.name||rows[0].driver.code||'').replace(/[\\\/:*?"<>|]/g, '').trim() : '';
+    await saveFile(`BangCong_${appPeriod}${single}.xlsx`, new Blob([buf], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+    toast(`Đã xuất bảng công ${rows.length} lái xe — kỳ ${periodCaption(appPeriod)}.`);
+  }catch(e){
+    console.error('Xuất bảng công lỗi', e);
+    toast('Xuất bảng công lỗi: ' + ((e && e.message) || e), 'danger');
+  }
+}
+
+/* ---------------- Màn hình Cấu hình › Mẫu bảng công (kéo thả) ---------------- */
+function renderBangCongConfig(){
+  const items = bcItems();
+  const mapping = bcStoredMapping();
+  const bySlot = {};
+  items.forEach(it=>{ const s = bcSlotOf(it, mapping); (bySlot[s] = bySlot[s] || []).push(it); });
+  const options = [{ k:'', l:'Chưa xếp (Phụ cấp khác)' }].concat(BC_DAILY_SLOTS, BC_MONTHLY_SLOTS);
+  const chip = it=>{
+    const cur = bcSlotOf(it, mapping);
+    return `<div class="bc-chip${it.builtin?' builtin':''}" draggable="true" data-item="${esc(it.key)}" title="Kéo sang cột khác">
+      <div class="bc-chip-main"><span class="bc-grip" aria-hidden="true"></span><span class="bc-chip-name">${esc(it.name)}</span></div>
+      <div class="bc-chip-sub"><small>${it.builtin?'Tự tính':'Phụ cấp'} · ${esc(it.hint||'')}</small>
+        <select class="bc-move" data-item="${esc(it.key)}" aria-label="Chuyển “${esc(it.name)}” sang cột">${options.map(o=>`<option value="${o.k}"${o.k===cur?' selected':''}>${esc(o.l)}</option>`).join('')}</select>
+      </div>
+    </div>`;
+  };
+  const slotBox = (s, letter)=>{
+    const list = bySlot[s.k] || [];
+    return `<div class="bc-slot${s.k===''?' bc-pool':''}" data-slot="${s.k}">
+      <div class="bc-slot-head"><b>${esc(s.l)}</b>${letter?`<span class="bc-letter">Cột ${letter}</span>`:''}${list.length>1&&s.k?'<span class="bc-plus">cộng gộp '+list.length+' khoản</span>':''}</div>
+      <div class="bc-chips">${list.map(chip).join('') || `<div class="bc-empty">${s.k?'Kéo khoản vào đây':'Không còn khoản nào chưa xếp'}</div>`}</div>
+    </div>`;
+  };
+  const doc = bcSettingsDoc();
+  const where = (storageMode==='local' || storageMode==='fallback') ? 'Lưu trên máy này' : 'Lưu chung cho mọi tài khoản';
+  const note = storageErrors.exportSettings
+    ? `<div class="warnbox bc-note"><b>Database chưa có chỗ lưu Mẫu bảng công</b> — cách xếp cột đang tạm lưu trên máy này. Chạy file <b>${esc(BC_UPGRADE_FILE)}</b> trong Supabase › SQL Editor để lưu chung cho mọi tài khoản.</div>`
+    : (doc && doc.updatedAt ? `<p class="muted bc-saved">${where} · sửa lần cuối ${esc(fmtDateTime(doc.updatedAt))}${doc.updatedBy?' bởi '+esc(doc.updatedBy):''}</p>`
+      : `<p class="muted bc-saved">Đang dùng cách xếp gợi ý theo tên. Kéo thả để đổi — ${where.toLowerCase()}.</p>`);
+  return `
+    <div class="pagehead">
+      <div><h1>Mẫu bảng công</h1>
+        <p>Xếp từng khoản lương/phụ cấp vào đúng cột của file <b>Bảng công lái xe</b> (xuất ở Bảng lương). Kéo thả từng khoản sang cột khác, hoặc chọn cột ở ô dưới mỗi khoản. Nhiều khoản cùng 1 cột thì cộng lại.</p></div>
+      <div class="actions">
+        <button class="btn" data-act="bc-reset">Đặt lại theo gợi ý</button>
+        <button class="btn primary" data-act="bc-export">Xuất bảng công kỳ này</button>
+      </div>
+    </div>
+    ${note}
+    <div class="bc-board">
+      <section class="panel bc-group">
+        <h3>Chưa xếp <small>khi xuất tự ghi thành dòng “Phụ cấp khác” để Tổng lương luôn khớp Bảng lương — loại phụ cấp mới tạo chưa khớp tên cột nào sẽ hiện ở đây</small></h3>
+        ${slotBox({ k:'', l:'Chưa xếp' })}
+      </section>
+      <section class="panel bc-group">
+        <h3>Cột theo ngày <small>mỗi chuyến 1 dòng — khoản cả kỳ ghi ở chuyến đầu tiên của dự án</small></h3>
+        <div class="bc-grid">${BC_DAILY_SLOTS.map((s,i)=>slotBox(s, bcColLetter(BC_INFO_HEADERS.length + 1 + i))).join('')}</div>
+      </section>
+      <section class="panel bc-group">
+        <h3>Ghi 1 dòng dưới bảng <small>khoản chỉ có 1 lần trong kỳ, không chia theo ngày</small></h3>
+        <div class="bc-grid">${BC_MONTHLY_SLOTS.map(s=>slotBox(s)).join('')}</div>
+      </section>
+    </div>`;
+}
+function bindBangCongConfig(){
+  const main = document.getElementById('main');
+  const endDrag = ()=>{
+    bcDragActive = false;
+    document.body.classList.remove('bc-dragging');
+    main.querySelectorAll('.bc-slot.over').forEach(s=>s.classList.remove('over'));
+    main.querySelectorAll('.bc-chip.dragging').forEach(c=>c.classList.remove('dragging'));
+  };
+  main.querySelectorAll('.bc-move').forEach(sel=>{
+    sel.onchange = ()=>bcSetSlot(sel.dataset.item, sel.value);
+    // Bấm vào ô chọn không được tính là bắt đầu kéo cả khoản
+    sel.addEventListener('mousedown', e=>e.stopPropagation());
+  });
+  main.querySelectorAll('.bc-chip').forEach(ch=>{
+    ch.addEventListener('dragstart', e=>{
+      if(e.target && e.target.closest && e.target.closest('select')){ e.preventDefault(); return; }
+      bcDragActive = true;
+      e.dataTransfer.setData('text/plain', ch.dataset.item);
+      e.dataTransfer.effectAllowed = 'move';
+      ch.classList.add('dragging');
+      document.body.classList.add('bc-dragging');
+    });
+    ch.addEventListener('dragend', ()=>{
+      endDrag();
+      if(bcRenderPending){ bcRenderPending = false; render(); }
+    });
+  });
+  main.querySelectorAll('.bc-slot').forEach(slot=>{
+    slot.addEventListener('dragover', e=>{ e.preventDefault(); e.dataTransfer.dropEffect = 'move'; slot.classList.add('over'); });
+    slot.addEventListener('dragleave', e=>{ if(!slot.contains(e.relatedTarget)) slot.classList.remove('over'); });
+    slot.addEventListener('drop', e=>{
+      e.preventDefault();
+      const key = e.dataTransfer.getData('text/plain');
+      endDrag();
+      bcRenderPending = false;
+      if(key) bcSetSlot(key, slot.dataset.slot); else render();
+    });
+  });
+  const reset = document.querySelector('[data-act="bc-reset"]');
+  if(reset) reset.onclick = ()=>{
+    if(!confirm('Đặt lại mọi khoản về cột gợi ý theo tên (bỏ hết cách xếp đã kéo thả)?')) return;
+    bcPendingMapping = {};
+    clearTimeout(bcSaveTimer);
+    bcSaveMapping(bcPendingMapping);
+    render();
+  };
+  const exp = document.querySelector('[data-act="bc-export"]');
+  if(exp) exp.onclick = exportBangCong;
+}
+
+/* =========================================================================
    MÀN HÌNH: CHUYẾN ĐI
    ========================================================================= */
 // Bộ lọc "Lái xe"/"Khách hàng" ở Chuyến đi tự RÀNG BUỘC lẫn nhau theo đúng
@@ -3336,7 +3926,7 @@ function tripMealAllowanceParts(trip){
     if(!String(at.name||'').toLowerCase().includes('ăn')) return;
     if(at.unit==='perDay'){
       const rate = allowanceRateFor(at, trip.project);
-      if(rate!=null && allowanceAppliesToPlate(at, trip.project, trip.plate)){ dayAmount = (dayAmount||0) + rate; any = true; }
+      if(rate!=null && allowanceAppliesToDriver(at, trip.project, trip.driverCode)){ dayAmount = (dayAmount||0) + rate; any = true; }
     }else if(at.unit==='perTripByKmCapacity'){
       const amt = tripAllowanceByKmCapacity(at, trip);
       if(amt>0){ tripAmount += amt; any = true; }
@@ -3347,7 +3937,7 @@ function tripMealAllowanceParts(trip){
       // giá/ngày tham khảo (workDayLines). Số tiền THẬT (theo tỷ lệ ngày
       // công thực tế / công chuẩn) vẫn tính đúng ở Bảng lương › Phụ cấp.
       const rate = allowanceRateFor(at, trip.project);
-      if(rate!=null && allowanceAppliesToPlate(at, trip.project, trip.plate)){
+      if(rate!=null && allowanceAppliesToDriver(at, trip.project, trip.driverCode)){
         const standardDays = safeNum(at.standardDays) || 26;
         dayAmount = (dayAmount||0) + Math.round(rate/standardDays); any = true;
       }
@@ -6339,31 +6929,32 @@ function renderAllowanceConfig(){
     </div>` : ''}`;
 }
 
-// Popup chọn nhiều BKS (nút "BKS áp dụng" ở khung Sửa/Thêm loại phụ cấp) —
+// Popup chọn nhiều Lái xe (nút "Lái xe" ở khung Sửa/Thêm loại phụ cấp) —
 // style/cách mở Y HỆT panel lọc cột kiểu Excel ở Lịch lái xe (ô tìm + "Chọn
 // tất cả" tri-state + danh sách tick + OK/Huỷ, nổi ngoài #modalbox để không
 // bị khung modal cuộn cắt mất — xem .th-filter-panel), nhưng TỔNG QUÁT: nhận
-// sẵn danh sách giá trị + tick hiện tại + callback khi bấm OK, không đụng
-// filters.trips.col như panel kia (panel đó chỉ dành riêng cho bảng Chuyến đi).
-let platePanelOpen = false;
+// sẵn danh sách giá trị {v,l} + tick hiện tại + callback khi bấm OK, không
+// đụng filters.trips.col như panel kia (panel đó chỉ dành riêng cho bảng
+// Chuyến đi).
+let driverPanelOpen = false;
 document.addEventListener('click', e=>{
-  if(platePanelOpen && !e.target.closest('.plate-filter-btn, .plate-filter-panel')) closePlateFilterPanel();
+  if(driverPanelOpen && !e.target.closest('.driver-filter-btn, .driver-filter-panel')) closeDriverFilterPanel();
 });
-function closePlateFilterPanel(){
-  const p = document.querySelector('.plate-filter-panel');
+function closeDriverFilterPanel(){
+  const p = document.querySelector('.driver-filter-panel');
   if(p) p.remove();
-  platePanelOpen = false;
+  driverPanelOpen = false;
 }
-function openPlateFilterPanel(btn, allValues, checked, onApply){
-  closePlateFilterPanel();
+function openDriverFilterPanel(btn, allValues, checked, onApply){
+  closeDriverFilterPanel();
   const checkedSet = new Set(checked);
   const panel = document.createElement('div');
-  panel.className = 'th-filter-panel plate-filter-panel';
-  panel.innerHTML = `<input type="text" class="cf-search-input" placeholder="Tìm biển số…">
+  panel.className = 'th-filter-panel driver-filter-panel';
+  panel.innerHTML = `<input type="text" class="cf-search-input" placeholder="Tìm mã/tên lái xe…">
     <label class="cf-check cf-all-row"><input type="checkbox" class="cf-all"> <b>Chọn tất cả</b></label>
-    <div class="cf-list">${allValues.length ? allValues.map(v=>`<label class="cf-check" data-cf-text="${esc(String(v).toLowerCase())}">
-        <input type="checkbox" class="cf-val" value="${esc(v)}"${checkedSet.has(v)?' checked':''}> <span class="cf-check-label">${esc(v)}</span></label>`).join('')
-      : '<div class="muted" style="padding:4px 2px;">Chưa có xe nào ở mục Phương tiện.</div>'}</div>
+    <div class="cf-list">${allValues.length ? allValues.map(o=>`<label class="cf-check" data-cf-text="${esc(String(o.l).toLowerCase())}">
+        <input type="checkbox" class="cf-val" value="${esc(o.v)}"${checkedSet.has(o.v)?' checked':''}> <span class="cf-check-label">${esc(o.l)}</span></label>`).join('')
+      : '<div class="muted" style="padding:4px 2px;">Chưa có lái xe nào ở mục Lái xe.</div>'}</div>
     <div class="cf-actions"><button type="button" class="btn sm primary" data-cf-ok>OK</button><button type="button" class="btn sm" data-cf-cancel>Huỷ</button></div>`;
   panel.addEventListener('click', ev=>ev.stopPropagation());
   document.body.appendChild(panel);
@@ -6373,7 +6964,7 @@ function openPlateFilterPanel(btn, allValues, checked, onApply){
   const left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8));
   panel.style.top = top + 'px';
   panel.style.left = left + 'px';
-  platePanelOpen = true;
+  driverPanelOpen = true;
   const listEl = panel.querySelector('.cf-list');
   const allBox = panel.querySelector('.cf-all');
   const searchInput = panel.querySelector('.cf-search-input');
@@ -6404,14 +6995,15 @@ function openPlateFilterPanel(btn, allValues, checked, onApply){
     rows.forEach(lbl=>{ lbl.hidden = !!qv && !lbl.dataset.cfText.includes(qv); });
     syncAllBox();
   };
-  panel.querySelector('[data-cf-ok]').onclick = ()=>{ onApply([...checkedSet]); closePlateFilterPanel(); };
-  panel.querySelector('[data-cf-cancel]').onclick = closePlateFilterPanel;
+  panel.querySelector('[data-cf-ok]').onclick = ()=>{ onApply([...checkedSet]); closeDriverFilterPanel(); };
+  panel.querySelector('[data-cf-cancel]').onclick = closeDriverFilterPanel;
 }
 
 function openTypeModal(rec){
   const t = rec || { unit:'perPeriod', rates:{} };
   const projects = allProjects();
-  const allPlates = state.vehicles.map(v=>v.plate).sort();
+  const allDrivers = [...state.drivers].sort((a,b)=>String(a.code).localeCompare(String(b.code)))
+    .map(d=>({v:d.code, l:d.code+' — '+d.name}));
   // Bảng "Đơn giá theo từng dự án" (đơn vị tính 1 số/dự án) chỉ hiện SẴN các
   // dự án ĐÃ có đơn giá — không liệt kê hết mọi khách hàng như trước, tránh
   // bảng dài tràn lan với mọi dự án không liên quan. Thêm dự án mới qua nút
@@ -6420,12 +7012,12 @@ function openTypeModal(rec){
   // mất dữ liệu — không cho thêm lại được vì không còn trong "projects".
   let ratesVisibleProjects = projects.filter(p=>t.rates && t.rates[p]!=null);
   Object.keys(t.rates||{}).forEach(p=>{ if(!ratesVisibleProjects.includes(p)) ratesVisibleProjects.push(p); });
-  // ratesDraft/platesDraft giữ giá trị ĐANG SỬA trong khung (kể cả khi đổi
+  // ratesDraft/driversDraft giữ giá trị ĐANG SỬA trong khung (kể cả khi đổi
   // Đơn vị tính qua lại hoặc thêm/xoá dòng dự án) — chỉ đọc lại t.rates/
-  // t.platesByProject ĐÚNG 1 LẦN lúc mở khung, không đọc lại khi vẽ lại bảng.
+  // t.driversByProject ĐÚNG 1 LẦN lúc mở khung, không đọc lại khi vẽ lại bảng.
   const ratesDraft = { ...(t.rates||{}) };
-  const platesDraft = {};
-  Object.keys(t.platesByProject||{}).forEach(p=>{ platesDraft[p] = [...(t.platesByProject[p]||[])]; });
+  const driversDraft = {};
+  Object.keys(t.driversByProject||{}).forEach(p=>{ driversDraft[p] = [...(t.driversByProject[p]||[])]; });
   // Bậc thang km × tải trọng xe (chỉ dùng khi đơn vị tính là "mỗi chuyến theo
   // km × tải trọng") — 1 dự án + 1 bảng {tiers,brackets}, y hệt cấu trúc 1
   // khu vực của khách hàng "Theo km" nên tái dùng thẳng các hàm dùng chung
@@ -6524,7 +7116,7 @@ function openTypeModal(rec){
     };
   }
   // Đồng bộ ô "Đơn giá" đang gõ trong DOM vào ratesDraft — gọi TRƯỚC mọi lần
-  // vẽ lại bảng (đổi Đơn vị tính, thêm/xoá dòng dự án, thêm/xoá BKS…) để
+  // vẽ lại bảng (đổi Đơn vị tính, thêm/xoá dòng dự án, thêm/xoá lái xe…) để
   // không mất số đang gõ ở các dòng KHÁC dòng vừa bấm nút.
   function syncSimpleRatesFromDom(){
     ratesVisibleProjects.forEach(p=>{
@@ -6536,16 +7128,16 @@ function openTypeModal(rec){
     const remainingProjects = projects.filter(p=>!ratesVisibleProjects.includes(p));
     const rows = ratesVisibleProjects.map(p=>{
       const v = ratesDraft[p];
-      const selectedPlates = platesDraft[p]||[];
+      const selectedDrivers = driversDraft[p]||[];
       return `<tr>
         <td>${esc(p)}</td>
         <td class="num"><input type="number" min="0" class="qty-input" id="m-rate-${idSafe(p)}" value="${v!=null?v:''}"></td>
-        <td><button type="button" class="btn sm plate-filter-btn" data-plate-filter="${esc(p)}">${selectedPlates.length ? selectedPlates.length+' xe' : 'Tất cả xe'}</button></td>
+        <td><button type="button" class="btn sm driver-filter-btn" data-driver-filter="${esc(p)}">${selectedDrivers.length ? selectedDrivers.length+' lái xe' : 'Tất cả lái xe'}</button></td>
         <td><button type="button" class="btn sm danger" data-del-project-row="${esc(p)}">Xoá</button></td>
       </tr>`;
     }).join('');
     return `<div class="modal-field full"><label>Đơn giá theo từng dự án — để trống thì dự án đó không áp dụng (0đ)</label>
-      <div class="tablewrap" style="margin-top:6px;"><table class="compact-table"><thead><tr><th>Dự án</th><th class="num">Đơn giá (đ)</th><th>BKS áp dụng</th><th></th></tr></thead>
+      <div class="tablewrap" style="margin-top:6px;"><table class="compact-table"><thead><tr><th>Dự án</th><th class="num">Đơn giá (đ)</th><th>Lái xe</th><th></th></tr></thead>
       <tbody>${rows || `<tr><td colspan="4" class="empty">Chưa có dự án nào — bấm "+ Thêm dự án" để thêm.</td></tr>`}</tbody></table></div>
       <div class="modal-actions" style="justify-content:flex-start;margin-top:8px;">
         ${remainingProjects.length ? `<select class="qty-input" style="max-width:220px;" id="m-add-project-sel">
@@ -6559,13 +7151,13 @@ function openTypeModal(rec){
     bindSimpleRatesTable();
   }
   function bindSimpleRatesTable(){
-    document.querySelectorAll('[data-plate-filter]').forEach(btn=>{
+    document.querySelectorAll('[data-driver-filter]').forEach(btn=>{
       btn.onclick = e=>{
         e.stopPropagation();
         syncSimpleRatesFromDom();
-        const p = btn.dataset.plateFilter;
-        openPlateFilterPanel(btn, allPlates, platesDraft[p]||[], checked=>{
-          platesDraft[p] = checked;
+        const p = btn.dataset.driverFilter;
+        openDriverFilterPanel(btn, allDrivers, driversDraft[p]||[], checked=>{
+          driversDraft[p] = checked;
           redrawSimpleRatesTable();
         });
       };
@@ -6576,7 +7168,7 @@ function openTypeModal(rec){
         const p = btn.dataset.delProjectRow;
         ratesVisibleProjects = ratesVisibleProjects.filter(x=>x!==p);
         delete ratesDraft[p];
-        delete platesDraft[p];
+        delete driversDraft[p];
         redrawSimpleRatesTable();
       };
     });
@@ -6619,9 +7211,9 @@ function openTypeModal(rec){
   }
   refreshUnit();
   // Đổi Đơn vị tính qua lại giữa 2 loại đều dùng bảng "1 số/dự án" (VD "Theo
-  // ngày công" -> "Theo chuyến") KHÔNG được mất số đã gõ/BKS đã chọn — đồng
-  // bộ vào ratesDraft/platesDraft TRƯỚC khi vẽ lại bảng theo unit mới (bảng
-  // vẫn đọc từ draft, không đọc lại t.rates).
+  // ngày công" -> "Theo chuyến") KHÔNG được mất số đã gõ/lái xe đã chọn —
+  // đồng bộ vào ratesDraft/driversDraft TRƯỚC khi vẽ lại bảng theo unit mới
+  // (bảng vẫn đọc từ draft, không đọc lại t.rates).
   $('m-unit').onchange = ()=>{ syncSimpleRatesFromDom(); refreshUnit(); };
   $('m-cancel').onclick = closeModal;
   $('m-save').onclick = async ()=>{
@@ -6630,7 +7222,7 @@ function openTypeModal(rec){
     if(!name){ modalError('Cần nhập tên phụ cấp.'); return; }
     if(state.allowanceTypes.some(x=>x.name===name && (!rec || x.id!==rec.id))){ modalError('Loại phụ cấp này đã có.'); return; }
     const rates = {};
-    let platesByProject = {};
+    let driversByProject = {};
     if(unit==='perTripByKmCapacity'){
       syncKmProjectFromDom();
       if(!kmProjectDraft.project){ modalError('Cần chọn khách hàng áp dụng.'); return; }
@@ -6658,12 +7250,12 @@ function openTypeModal(rec){
       ratesVisibleProjects.forEach(p=>{
         const v = ratesDraft[p];
         if(v>0) rates[p] = v;
-        const plates = platesDraft[p];
-        if(plates && plates.length) platesByProject[p] = [...plates];
+        const drivers = driversDraft[p];
+        if(drivers && drivers.length) driversByProject[p] = [...drivers];
       });
       if(!Object.keys(rates).length){ modalError('Cần nhập đơn giá cho ít nhất 1 dự án.'); return; }
     }
-    const data = { name, unit, rates, platesByProject };
+    const data = { name, unit, rates, driversByProject };
     if(unit==='perPeriodMinDays'){
       data.minDays = safeNum($('m-mindays').value) || 15;
       data.onceOnly = $('m-onceonly').checked;
@@ -6722,7 +7314,7 @@ function renderGuide(){
         <li>Chọn kỳ ở ô <b>Kỳ lương đang xem</b> (thanh bên trái) — mọi màn hình đều theo kỳ này.</li>
         <li>Nhập đủ <b>Lịch lái xe</b>, <b>Khấu trừ</b>, <b>Nhiên liệu</b> (xe khoán dầu), <b>Chấm công phụ cấp</b> (phụ cấp nhập tay).</li>
         <li>Vào <b>Bảng lương</b>: xử lý hết cảnh báo đầu trang và các dòng có dấu ⚠, mở từng dòng để đối soát.</li>
-        <li>Bấm <b>Chốt kỳ này</b>, rồi <b>Xuất Excel</b> (4 sheet: bảng lương, chi tiết chuyến, phụ cấp, khấu trừ) hoặc CSV.</li>
+        <li>Bấm <b>Chốt kỳ này</b>, rồi <b>Xuất Excel</b> (4 sheet: bảng lương, chi tiết chuyến, phụ cấp, khấu trừ) hoặc CSV. Cần bảng công gửi lái xe/kế toán thì bấm <b>Xuất bảng công lái xe</b> (mỗi lái xe 1 sheet theo họ tên, theo mẫu ở Cấu hình › Mẫu bảng công).</li>
       </ol>
     </div>
 
@@ -6753,6 +7345,7 @@ function renderGuide(){
         <li><b>Lái xe</b>: chọn xe phụ trách (nhiều lái xe có thể chọn chung 1 xe theo ca), bật Lương cứng nếu khách trả thẳng cho lái xe, nhập Phụ cấp thâm niên nếu có (nhận trọn mỗi kỳ).</li>
         <li><b>Lương theo tuyến</b>: chọn khách hàng rồi gõ từng dòng — Tên tuyến (tên gọi nội bộ, không bắt buộc), Tuyến đường dạng "Điểm đi → Điểm đến" (đây là khoá tra giá), đơn giá, đơn giá tăng cường (trống = như giá thường), rồi bấm Lưu bảng giá. Đổi Tuyến đường đang có chuyến dùng thì các chuyến đó đổi theo. Khách Theo km cũng đặt được vài tuyến giá cố định ở đây.</li>
         <li><b>Phụ cấp</b>: tạo loại phụ cấp, chọn đơn vị tính, nhập đơn giá cho từng khách hàng áp dụng. Không cần gán cho từng lái xe.</li>
+        <li><b>Mẫu bảng công</b>: kéo từng khoản (lương chuyến, lương trực, rớt điểm, từng loại phụ cấp, dầu tiết kiệm…) vào đúng cột của file Bảng công lái xe. Nhiều khoản cùng 1 cột thì cộng lại; khoản chưa xếp tự ghi thành dòng "Phụ cấp khác". Cột Tuyến lấy theo Tên tuyến ở Lương theo tuyến (riêng NTF luôn ghi "Kho Nutifood Hưng Yên"). Cách xếp lưu chung cho mọi tài khoản.</li>
         <li>Có sẵn danh sách trong Excel: <b>Tải mẫu Excel</b> → điền → <b>Nhập từ Excel</b>. Mã lái xe/biển số đã có thì cập nhật, mã mới thì thêm.</li>
       </ul>
     </details>
@@ -6979,7 +7572,7 @@ if(SUPABASE_ENABLED && !Auth.isLoggedIn()){
   const NAV_ICON = {
     payroll:'wallet', trips:'truck', allowanceUsage:'clipboard', fuel:'fuel', deductions:'minusCircle',
     'cfg-drivers':'idCard', 'cfg-vehicles':'bus', 'cfg-customers':'building', 'cfg-routes':'route',
-    'cfg-allowance':'coins', 'cfg-users':'userCog', guide:'help',
+    'cfg-allowance':'coins', 'cfg-bangcong':'sheet', 'cfg-users':'userCog', guide:'help',
   };
   // Tiêu đề của card danh sách theo từng trang (chữ "Lists" trong mẫu).
   const LIST_TITLE = {

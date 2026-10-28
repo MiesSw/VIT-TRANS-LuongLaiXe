@@ -104,12 +104,12 @@ CREATE TABLE allowance_types (
   standard_days     INTEGER,
   once_only         BOOLEAN,
   rates             JSONB         NOT NULL DEFAULT '{}'::jsonb,
-  -- BKS áp dụng riêng theo từng dự án — {"<mã dự án>": ["<BKS>", ...]}. Dự án
-  -- không có khoá ở đây (hoặc danh sách rỗng) = áp dụng cho MỌI xe chạy dự
-  -- án đó. Chỉ có ý nghĩa với đơn vị tính 1 số/dự án (không áp dụng cho
-  -- "Theo tải trọng xe"/"theo km × tải trọng" — 2 loại đó đã tự giới hạn
+  -- Lái xe áp dụng riêng theo từng dự án — {"<mã dự án>": ["<mã lái xe>", ...]}.
+  -- Dự án không có khoá ở đây (hoặc danh sách rỗng) = áp dụng cho MỌI lái xe
+  -- chạy dự án đó. Chỉ có ý nghĩa với đơn vị tính 1 số/dự án (không áp dụng
+  -- cho "Theo tải trọng xe"/"theo km × tải trọng" — 2 loại đó đã tự giới hạn
   -- theo tải trọng xe).
-  plates_by_project JSONB
+  drivers_by_project JSONB
 );
 
 CREATE TABLE allowance_configs (
@@ -203,6 +203,18 @@ CREATE TABLE period_locks (
 );
 
 -- -----------------------------------------------------------------------------
+-- MẪU BẢNG CÔNG — cách xếp khoản lương/phụ cấp vào cột khi xuất "Bảng công
+-- lái xe" (Cấu hình › Mẫu bảng công), dùng chung mọi tài khoản. 1 dòng id =
+-- 'bangcong'; "mapping" = {"<khoản>": "<cột>"}.
+-- -----------------------------------------------------------------------------
+CREATE TABLE export_settings (
+  id          TEXT         PRIMARY KEY,
+  mapping     JSONB        NOT NULL DEFAULT '{}'::jsonb,
+  updated_at  TIMESTAMPTZ  NOT NULL DEFAULT now(),
+  updated_by  TEXT
+);
+
+-- -----------------------------------------------------------------------------
 -- HỒ SƠ NGƯỜI DÙNG — 1-1 với auth.users (bảng có sẵn của Supabase Auth, chỉ
 -- đọc chứ không tự tạo/sửa cấu trúc được). role='admin' có toàn quyền quản
 -- lý tài khoản khác (xem/đổi quyền, khoá tài khoản) qua màn hình "Người
@@ -249,7 +261,7 @@ CREATE POLICY profiles_update_admin_only ON profiles FOR UPDATE
   USING (is_admin()) WITH CHECK (is_admin());
 
 -- =============================================================================
--- ROW LEVEL SECURITY (11 bảng nghiệp vụ) — chặn mọi truy cập trừ khi request
+-- ROW LEVEL SECURITY (12 bảng nghiệp vụ) — chặn mọi truy cập trừ khi request
 -- có phiên đăng nhập Supabase Auth hợp lệ (auth.uid() khác NULL). TẠM THỜI
 -- mọi tài khoản đã đăng nhập đều có toàn quyền như nhau — sau này muốn phân
 -- quyền chi tiết hơn theo profiles.role thì chỉ cần sửa lại policy ở đây,
@@ -260,7 +272,7 @@ DECLARE tbl text;
 BEGIN
   FOREACH tbl IN ARRAY ARRAY['customers','drivers','vehicles','routes',
     'allowance_types','allowance_configs','allowance_usage','trips',
-    'deductions','fuel_logs','fuel_prices']
+    'deductions','fuel_logs','fuel_prices','export_settings']
   LOOP
     EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY;', tbl);
     EXECUTE format('DROP POLICY IF EXISTS app_secret_access ON %I;', tbl);
