@@ -1229,7 +1229,7 @@ function snapshotPayrollRows(period){
   });
 }
 async function lockPeriod(period){
-  if(storageErrors.periodLocks){ toast(`Chưa chốt được: database chưa có bảng Chốt kỳ — chạy file "${DB_UPGRADE_FILE}" trong Supabase trước.`, 'danger'); return; }
+  if(storageErrors.periodLocks){ toast(`Chưa chốt được: database chưa có bảng Chốt kỳ (period_locks) — ${DB_UPGRADE_HINT}.`, 'danger'); return; }
   const warnCount = buildWarnings(period).length;
   const msg = (warnCount ? `Kỳ này còn ${warnCount} cảnh báo dữ liệu chưa xử lý.\n\n` : '')
     + `Chốt kỳ ${periodLabelVi(period)}? Sau khi chốt, bảng lương kỳ này được giữ nguyên và không thêm/sửa/xoá được chuyến, khấu trừ, nhiên liệu, chấm công của kỳ này nữa (trừ khi Mở chốt).`;
@@ -1624,7 +1624,7 @@ function makeLocalDb(){
    LỚP LƯU TRỮ SUPABASE (Postgres thật, qua REST API PostgREST) — kết nối
    trực tiếp từ trình duyệt bằng anon key, KHÔNG cần backend riêng (đúng
    kiểu Supabase được thiết kế để dùng: anon key vốn công khai, an toàn nhờ
-   RLS ở phía database — xem supabase_setup.sql/auth_migration.sql). Mọi
+   RLS ở phía database — xem supabase_setup.sql). Mọi
    request kèm theo access token của phiên đăng nhập (Auth module bên dưới)
    để RLS biết auth.uid() là ai — không đăng nhập thì bị chặn hết.
    ========================================================================= */
@@ -1632,9 +1632,9 @@ const SUPABASE_URL = 'https://vacyyyqgnqwuastjimlz.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZhY3l5eXFnbnF3dWFzdGppbWx6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkyNTEwNDQsImV4cCI6MjEwNDgyNzA0NH0.-HkI4Y8PS_oYbKdZ9ygNTRuXZNgLlIUkpBlDZbzr2ME';
 // Đặt cả hằng trên thành '' để tắt hẳn, quay lại chạy offline (localStorage).
 const SUPABASE_ENABLED = !!(SUPABASE_URL && SUPABASE_ANON_KEY);
-// File SQL nâng cấp database đang chạy thật cho bản app.js này (thêm cột
-// Lương trực riêng, ô "Phụ cấp đường dài theo ngày", bảng Chốt kỳ).
-const DB_UPGRADE_FILE = 'nang_cap_2026-10_chot_ky.sql';
+// Gợi ý khi database thiếu cột/bảng mà bản app.js này cần (cấu trúc đầy đủ
+// luôn ở supabase_setup.sql, câu kiểm tra ở README).
+const DB_UPGRADE_HINT = 'xem mục "Database Supabase" trong README.md để nâng cấp';
 
 /* =========================================================================
    ĐĂNG NHẬP (Supabase Auth) — CHỈ áp dụng khi SUPABASE_ENABLED. Mỗi người
@@ -1824,7 +1824,7 @@ function makeSupabaseDb(){
     // cần) — PostgREST trả PGRST204/PGRST205/42P01. Báo rõ cách khắc phục thay
     // vì nguyên văn lỗi kỹ thuật.
     if(/PGRST20[45]|42P01|42703|schema cache|does not exist/i.test(body)){
-      throw new Error(`Database Supabase chưa được nâng cấp cho bản app này — chạy file "${DB_UPGRADE_FILE}" trong Supabase › SQL Editor rồi thử lại.`);
+      throw new Error(`Database Supabase chưa được nâng cấp cho bản app này (thiếu cột/bảng mới) — ${DB_UPGRADE_HINT}.`);
     }
     throw new Error(`Supabase lỗi khi ${action} "${key}": ${res.status} ${body}`);
   }
@@ -2862,7 +2862,7 @@ function renderPayroll(){
       <div class="actions">
         ${lock
           ? `<button class="btn" data-act="unlock-period">Mở chốt kỳ</button>`
-          : `<button class="btn" data-act="lock-period"${storageErrors.periodLocks?` title="${esc('Database chưa có bảng Chốt kỳ — chạy file '+DB_UPGRADE_FILE)}"`:''}>Chốt kỳ này</button>`}
+          : `<button class="btn" data-act="lock-period"${storageErrors.periodLocks?` title="${esc('Database chưa có bảng Chốt kỳ (period_locks) — '+DB_UPGRADE_HINT)}"`:''}>Chốt kỳ này</button>`}
         <button class="btn" data-act="export-csv">Xuất CSV</button>
         <button class="btn" data-act="export-bangcong" title="Mỗi lái xe 1 sheet theo mẫu bảng công — xếp cột ở Cấu hình › Mẫu bảng công">Xuất bảng công lái xe</button>
         <button class="btn primary" data-act="export-xlsx">Xuất Excel (.xlsx)</button>
@@ -3291,7 +3291,6 @@ const BC_INFO_HEADERS = ['Ngày','BKS','Lái xe','Trạng thái','Dự án','Tuy
 const BC_COL_WIDTHS = [12.1, 13.3, 24, 12.2, 14.7, 23.9, 47.9, 8.3, 15.6, 12.8, 11.8, 12.9, 13.3, 14.9, 13.4, 12.9, 12.7];
 const BC_SETTINGS_ID = 'bangcong';
 const BC_LOCAL_KEY = 'vittrans_bangcong_mapping'; // dự phòng khi database chưa có bảng export_settings
-const BC_UPGRADE_FILE = 'nang_cap_2026-10-28_mau_bang_cong.sql';
 const EXCELJS_URL = 'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js';
 // Cột "Tuyến" = "Tên tuyến" ở Lương theo tuyến; riêng các khách hàng dưới
 // đây luôn ghi 1 tên cố định (yêu cầu người dùng ngày 2026-10-28: NTF luôn
@@ -3758,7 +3757,7 @@ function renderBangCongConfig(){
   const doc = bcSettingsDoc();
   const where = (storageMode==='local' || storageMode==='fallback') ? 'Lưu trên máy này' : 'Lưu chung cho mọi tài khoản';
   const note = storageErrors.exportSettings
-    ? `<div class="warnbox bc-note"><b>Database chưa có chỗ lưu Mẫu bảng công</b> — cách xếp cột đang tạm lưu trên máy này. Chạy file <b>${esc(BC_UPGRADE_FILE)}</b> trong Supabase › SQL Editor để lưu chung cho mọi tài khoản.</div>`
+    ? `<div class="warnbox bc-note"><b>Database chưa có chỗ lưu Mẫu bảng công</b> — cách xếp cột đang tạm lưu trên máy này. Database cần có bảng <b>export_settings</b> để lưu chung cho mọi tài khoản — ${esc(DB_UPGRADE_HINT)}.</div>`
     : (doc && doc.updatedAt ? `<p class="muted bc-saved">${where} · sửa lần cuối ${esc(fmtDateTime(doc.updatedAt))}${doc.updatedBy?' bởi '+esc(doc.updatedBy):''}</p>`
       : `<p class="muted bc-saved">Đang dùng cách xếp gợi ý theo tên. Kéo thả để đổi — ${where.toLowerCase()}.</p>`);
   return `

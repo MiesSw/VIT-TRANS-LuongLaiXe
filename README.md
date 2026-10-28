@@ -31,25 +31,58 @@ index.html          Khung trang, chỉ load styles.css + app.js
 styles.css          Toàn bộ giao diện (theme sáng/tối tự theo hệ điều hành)
 app.js              Toàn bộ logic — 1 file duy nhất, không chia module
 schema.sql          Schema PostgreSQL + dữ liệu MẪU (tham khảo/test cục bộ)
-supabase_setup.sql  Schema PostgreSQL (không kèm dữ liệu mẫu) + RLS + đăng
-                    nhập — chạy file này trong SQL Editor của Supabase khi
-                    CÀI MỚI (database trống)
-auth_migration.sql  Chỉ phần đăng nhập (RLS + bảng "profiles") — chạy file
-                    này thay vì supabase_setup.sql khi NÂNG CẤP database
-                    Supabase đang chạy thật (đã có dữ liệu)
+supabase_setup.sql  Cấu trúc database ĐẦY ĐỦ, MỚI NHẤT (không kèm dữ liệu
+                    mẫu) + RLS + đăng nhập — đã gộp sẵn mọi lần nâng cấp,
+                    chạy khi CÀI MỚI / XÂY LẠI database trống
 ```
 
 Không có build tool, không có framework, không có `package.json` — thuần
 HTML/CSS/JS, chạy được ngay khi mở file.
 
+## Database Supabase
+
+`supabase_setup.sql` luôn là cấu trúc database đầy đủ của bản app.js hiện
+tại (mọi bảng, cột, quyền RLS, đăng nhập) — **giữ file này là đủ**, không
+cần giữ các file nâng cấp cũ.
+
+- **Cài mới / xây lại từ đầu** (database trống): Supabase › SQL Editor → dán
+  TOÀN BỘ `supabase_setup.sql` → Run (chỉ chạy 1 lần — chạy lại sẽ báo lỗi
+  "table already exists"). Sau đó tạo tài khoản admin đầu tiên (xem mục
+  "Đăng nhập & phân quyền người dùng").
+- **Nâng cấp database đang chạy thật** (đã có dữ liệu): KHÔNG chạy lại
+  `supabase_setup.sql`. Bản app.js nào cần thêm cột/bảng mới sẽ kèm 1 file
+  nâng cấp riêng (`nang_cap_<ngày>_....sql`, chỉ thêm cột/bảng, chạy lại
+  không lỗi) và `supabase_setup.sql` được cập nhật cùng lúc. Chạy file nâng
+  cấp trong SQL Editor, chạy câu kiểm tra bên dưới thấy đủ `true` thì xoá
+  file nâng cấp đi (bản cũ vẫn còn trong lịch sử git nếu cần xem lại).
+
+Ngày 28/10/2026: database đang chạy thật đã nhận đủ mọi lần nâng cấp, các
+file nâng cấp cũ (`auth_migration.sql`, `nang_cap_2026-10*.sql`) đã xoá.
+
+**Kiểm tra database có đủ cột/bảng app cần** — SQL Editor → Run, mọi dòng
+phải ra `da_co = true` (dòng nào `false` là thiếu, cần chạy file nâng cấp
+tương ứng). Mỗi lần thêm cột/bảng mới thì thêm 1 dòng vào danh sách này:
+
+```sql
+SELECT t.tbl AS bang, t.col AS cot,
+  EXISTS (SELECT 1 FROM information_schema.columns c
+          WHERE c.table_schema = 'public' AND c.table_name = t.tbl
+            AND (t.col IS NULL OR c.column_name = t.col)) AS da_co
+FROM (VALUES
+  ('customers',       'standby_up_to_5'),
+  ('customers',       'long_haul_full_day'),
+  ('allowance_types', 'once_only'),
+  ('allowance_types', 'drivers_by_project'),
+  ('period_locks',    NULL),
+  ('export_settings', NULL),
+  ('profiles',        NULL)
+) AS t(tbl, col);
+```
+
 ## Nâng cấp ngày 22/10/2026 (rà soát thao tác & câu chữ)
 
-**Database Supabase đang chạy thật: chạy `nang_cap_2026-10_chot_ky.sql`
-trong Supabase › SQL Editor TRƯỚC khi dùng app.js mới** (thêm 3 cột Lương
-trực riêng, cột "Phụ cấp đường dài theo ngày", bảng `period_locks` cho Chốt
-kỳ; chạy lại không lỗi, không mất dữ liệu). Chưa chạy thì lưu khách hàng và
-Chốt kỳ sẽ báo "Database chưa được nâng cấp". Cài mới từ đầu thì chỉ cần
-`supabase_setup.sql` (đã gộp sẵn).
+Database: thêm 3 cột Lương trực riêng, cột "Phụ cấp đường dài theo ngày",
+bảng `period_locks` cho Chốt kỳ (đã nâng cấp, đã gộp vào `supabase_setup.sql`).
 
 Thay đổi chính: Chốt kỳ / Mở chốt kỳ (admin) ở Bảng lương; ô chọn có gõ tìm
 không còn lưu nhầm giá trị cũ khi bấm Lưu ngay; nhập Excel chặn chuyến trùng,
@@ -70,18 +103,15 @@ trên hồ sơ khách hàng và ô "Số lượt bốc xếp" trên từng chuy�
 sẵn, unit "Theo chuyến") như mọi phụ cấp khác, không cộng thẳng vào Lương
 chuyến nữa.
 
-**Database Supabase đang chạy thật: chạy `nang_cap_2026-10-23_gop_bocxep.sql`
-trong Supabase › SQL Editor** — xoá đơn giá bốc xếp cũ trên hồ sơ khách
-hàng và số lượt bốc xếp cũ trên các chuyến (không còn dùng tới); KHÔNG đổi
-cách tính của khách hàng nào (SGW/BHX vẫn giữ nguyên là "Theo chuyến",
-không chuyển sang "Theo tuyến cố định").
+Database: đã xoá đơn giá bốc xếp cũ trên hồ sơ khách hàng và số lượt bốc
+xếp cũ trên các chuyến (không còn dùng tới); KHÔNG đổi cách tính của khách
+hàng nào (SGW/BHX vẫn là "Theo chuyến"). Các kỳ **đã chốt** không bị ảnh
+hưởng (Bảng lương đọc đúng bản đã lưu lúc chốt, không tính lại).
 
-⚠️ **Trước khi chạy file đó**, nếu muốn giữ nguyên tổng lương của các kỳ
-**chưa chốt**: vào Cấu hình › Phụ cấp, đặt đơn giá bốc xếp cho SGW/BHX
-(thay cho đơn giá bốc xếp cũ trên hồ sơ khách hàng) — vì sau khi chạy file
-nâng cấp, các chuyến cũ có ghi "Số lượt bốc xếp" sẽ không còn tự cộng
-khoản này vào Lương chuyến. Các kỳ **đã chốt** không bị ảnh hưởng (Bảng
-lương đọc đúng bản đã lưu lúc chốt, không tính lại).
+Cùng đợt: ô **"Chỉ tính 1 lần/kỳ"** cho phụ cấp nhận trọn khi vượt số ngày
+công tối thiểu (cột `once_only`, VD Phụ cấp điện thoại không nhân theo số
+dự án). Ngày 25/10/2026: cột **"Lái xe áp dụng"** ở Cấu hình › Phụ cấp ›
+Sửa (cột `drivers_by_project`, thay cho "BKS áp dụng" cũ).
 
 ## Nâng cấp ngày 28/10/2026 (Xuất bảng công lái xe + Mẫu bảng công)
 
@@ -119,11 +149,10 @@ File Excel xuất bằng thư viện ExcelJS (tải từ cdnjs khi bấm xuất 
 để giữ được font Times New Roman, viền ô, chữ đậm, dòng TỔNG LƯƠNG nền vàng
 như file mẫu — máy cần có mạng lúc xuất.
 
-**Database Supabase đang chạy thật: chạy `nang_cap_2026-10-28_mau_bang_cong.sql`
-trong Supabase › SQL Editor** — thêm bảng `export_settings` để lưu cách xếp
-cột dùng chung cho mọi tài khoản (chạy lại không lỗi, không đụng dữ liệu
-cũ). Chưa chạy thì vẫn xuất bảng công được, chỉ là cách xếp cột tạm lưu
-riêng trên từng máy.
+Database: thêm bảng `export_settings` để lưu cách xếp cột dùng chung cho
+mọi tài khoản (đã nâng cấp, đã gộp vào `supabase_setup.sql`). Database thiếu
+bảng này thì vẫn xuất bảng công được, chỉ là cách xếp cột tạm lưu riêng
+trên từng máy.
 
 ## Sao lưu dữ liệu
 
@@ -131,6 +160,9 @@ Vào **Hướng dẫn** → **Sao lưu dữ liệu** → **Tải file sao lưu (
 mỗi kỳ chốt lương. Bản chạy offline (mở trực tiếp file) xoá dữ liệu duyệt
 web là mất hết, nên cần tải file sao lưu định kỳ; bản chạy qua claude.ai vẫn
 nên tải để giữ thêm 1 bản ngoài hệ thống.
+
+Lưu ý: nút **Phục hồi từ file sao lưu** chỉ có ở bản offline — khi dùng
+Supabase, app chưa nạp ngược được file `.json` vào database.
 
 ## Tổng quan chức năng
 
@@ -171,8 +203,9 @@ Các file SQL định nghĩa schema Postgres khớp 1-1 với các collection tr
   tham khảo cấu trúc hoặc test trên 1 Postgres cục bộ, KHÔNG dùng cho
   Supabase thật (sẽ lẫn dữ liệu giả vào dữ liệu công ty).
 - `supabase_setup.sql`: KHÔNG có dữ liệu mẫu, có thêm khối bật Row Level
-  Security (RLS) cho cả 10 bảng — đây là file cần dán vào **Supabase
-  Dashboard → SQL Editor → Run** để tạo database thật.
+  Security (RLS) cho mọi bảng — đây là file cần dán vào **Supabase
+  Dashboard → SQL Editor → Run** để tạo database thật (xem mục "Database
+  Supabase").
 
 App đã nối thẳng vào Supabase qua REST API (PostgREST) bằng 2 hằng số ở đầu
 `makeSupabaseDb()` trong app.js: `SUPABASE_URL`, `SUPABASE_ANON_KEY` — không
@@ -185,7 +218,7 @@ Khi chạy qua Supabase thật, app bắt đăng nhập email/mật khẩu (Supa
 trước khi cho vào — không còn dùng chung 1 "mật khẩu app" cho mọi người như
 bản cũ (`x-app-secret`). Mỗi người 1 tài khoản riêng, Row Level Security
 (RLS) trên Postgres chỉ cho phép đọc/ghi khi có phiên đăng nhập hợp lệ
-(`auth.uid()` khác NULL) — xem `auth_migration.sql`/`supabase_setup.sql`.
+(`auth.uid()` khác NULL) — xem `supabase_setup.sql`.
 
 **Tạo tài khoản mới** (chỉ admin làm, KHÔNG có nút "Đăng ký" trong app — tạo
 tài khoản cần khoá bí mật của Supabase, không thể làm an toàn từ trình
@@ -210,9 +243,7 @@ phân quyền chi tiết hơn theo từng màn hình sau này thì sửa lại c
 RLS trong Supabase (dựa vào `profiles.role`), không cần đổi gì bên app.js.
 
 **Cài đặt lần đầu vào database trống**: `supabase_setup.sql` đã gộp sẵn phần
-đăng nhập này, chạy 1 file là đủ. **Nâng cấp database đang chạy thật** (đã
-có dữ liệu, đang dùng `x-app-secret` cũ): chạy `auth_migration.sql` thay vì
-chạy lại `supabase_setup.sql` (sẽ báo lỗi trùng bảng).
+đăng nhập này, chạy 1 file là đủ.
 
 ## Mã nguồn mở + tự cập nhật bản mới từ GitHub
 
