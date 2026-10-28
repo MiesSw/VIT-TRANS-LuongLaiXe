@@ -19,6 +19,7 @@ import zipfile
 import urllib.request
 
 PORT = 5678
+APP_ID = 'vit-trans-luonglaixe'
 
 # Tên kho trên GitHub.
 REPO = 'MiesSw/VIT-TRANS-LuongLaiXe'
@@ -83,6 +84,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self):
+        if self.path == '/api/whoami':
+            # Để bản app khác mở sau biết cổng này đang chạy ĐÚNG app này
+            # và ở thư mục nào (xem open_server).
+            self._json(200, {'app': APP_ID, 'root': ROOT, 'version': local_version()})
+            return
         if self.path == '/api/update-check':
             local = local_version()
             try:
@@ -140,14 +146,74 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         pass
 
 
-def open_server():
-    """Mở server ở cổng PORT; cổng đó đang bị chiếm (VD đang mở sẵn 1 cửa sổ
-    app khác — bản ở thư mục khác, hoặc file .exe) thì tự thử các cổng kế
-    tiếp, không báo lỗi rồi tắt như trước."""
-    last_error = None
-    for port in range(PORT, PORT + 20):
+def notify(msg):
+    """In ra cửa sổ đen; bản .exe (không có cửa sổ đen) thì hiện hộp thoại."""
+    print(msg)
+    if getattr(sys, 'frozen', False) and os.name == 'nt':
         try:
-            return socketserver.TCPServer(('127.0.0.1', port), Handler), port
+            import ctypes
+            ctypes.windll.user32.MessageBoxW(None, msg, 'VIT TRANS — Lương lái xe', 0x40)
+        except Exception:
+            pass
+
+
+def same_folder(a, b):
+    return os.path.normcase(os.path.abspath(a or '')) == os.path.normcase(os.path.abspath(b or ''))
+
+
+def probe(port):
+    """Hỏi chương trình đang chiếm cổng: có phải app này không, ở thư mục nào.
+    Trả về dict thông tin / 'old' (app này nhưng bản cũ, chưa có /api/whoami)
+    / None (chương trình khác)."""
+    base = 'http://127.0.0.1:%d' % port
+    try:
+        with urllib.request.urlopen(base + '/api/whoami', timeout=2) as r:
+            info = json.loads(r.read().decode('utf-8'))
+            if info.get('app') == APP_ID:
+                return info
+    except Exception:
+        pass
+    try:
+        # Bản cũ chưa có /api/whoami: nhận ra qua tiêu đề trang của app.
+        with urllib.request.urlopen(base + '/index.html', timeout=2) as r:
+            if 'Lương Lái Xe VIT TRANS' in r.read(4096).decode('utf-8', 'ignore'):
+                return 'old'
+    except Exception:
+        pass
+    return None
+
+
+def open_server():
+    """Mở server ở cổng PORT. Cổng đang bị chiếm thì:
+      - đúng app này, cùng thư mục  -> mở trình duyệt vào cửa sổ đang chạy, không mở thêm;
+      - app này nhưng thư mục khác   -> dừng, báo đóng cửa sổ kia (KHÔNG tự đổi cổng: trình
+        duyệt lưu đăng nhập/dữ liệu offline riêng theo từng cổng, đổi cổng là thấy trống);
+      - chương trình khác            -> mới chuyển sang cổng kế tiếp, kèm cảnh báo.
+    Trả về (httpd, port), hoặc (None, mã thoát) khi không mở server mới."""
+    try:
+        return socketserver.TCPServer(('127.0.0.1', PORT), Handler), PORT
+    except OSError:
+        pass
+    url = 'http://127.0.0.1:%d/index.html' % PORT
+    info = probe(PORT)
+    if isinstance(info, dict) and same_folder(info.get('root'), ROOT):
+        print('App đang mở sẵn ở cửa sổ khác — mở lại trình duyệt vào đó:', url)
+        webbrowser.open(url)
+        return None, 0
+    if info:
+        where = info.get('root') if isinstance(info, dict) else '(bản cũ, không rõ thư mục)'
+        notify('Đang có 1 cửa sổ app Lương lái xe khác mở sẵn ở thư mục:\n  %s\n\n'
+               'Hãy đóng cửa sổ đó (cửa sổ đen "VIT TRANS - Luong lai xe" hoặc file .exe), '
+               'rồi mở lại app ở thư mục này:\n  %s' % (where, ROOT))
+        return None, 1
+    last_error = None
+    for port in range(PORT + 1, PORT + 20):
+        try:
+            httpd = socketserver.TCPServer(('127.0.0.1', port), Handler)
+            print('LƯU Ý: cổng %d đang bị 1 chương trình khác dùng — app chạy tạm ở cổng %d.' % (PORT, port))
+            print('Ở cổng này trình duyệt sẽ bắt đăng nhập lại; bản offline (không dùng Supabase) sẽ KHÔNG')
+            print('thấy dữ liệu đã nhập ở cổng %d. Muốn dùng lại như cũ: tắt chương trình đang chiếm cổng %d.' % (PORT, PORT))
+            return httpd, port
         except OSError as e:
             last_error = e
     raise last_error
@@ -155,11 +221,11 @@ def open_server():
 
 if __name__ == '__main__':
     httpd, port = open_server()
+    if httpd is None:
+        sys.exit(port)
     with httpd:
         url = 'http://127.0.0.1:%d/index.html' % port
         threading.Timer(0.6, lambda: webbrowser.open(url)).start()
-        if port != PORT:
-            print('(Cổng %d đang có 1 cửa sổ app khác mở sẵn — bản này chạy ở cổng %d.)' % (PORT, port))
         print('VIT TRANS — Lương lái xe đang chạy tại', url)
         print('Thư mục app:', ROOT)
         print('Cứ để cửa sổ này mở trong lúc dùng app. Đóng cửa sổ này = tắt app.')
