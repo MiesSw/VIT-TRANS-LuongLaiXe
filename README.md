@@ -90,19 +90,21 @@ mẫu bảng công của công ty, **mỗi lái xe 1 sheet đặt theo họ tên
 lái xe đang hiện theo bộ lọc Bảng lương — lọc 1 lái xe thì ra file riêng
 người đó). Mỗi sheet gồm:
 
-- Bảng theo ngày, mỗi chuyến ở Lịch lái xe 1 dòng: Ngày, BKS, Lái xe, Trạng
-  thái (loại chuyến), Dự án (mã khách hàng), Tuyến (= **Tên tuyến** ở Lương
-  theo tuyến; riêng NTF luôn ghi "Kho Nutifood Hưng Yên"), Chi tiết (tuyến
-  đường; khách theo km ghi điểm đến; ngày Trực/Nghỉ ghi "Trực"/"Nghỉ"), Km,
-  rồi 9 cột tiền: Lương cơ bản/Lương trực, Lương chuyến, Lương điểm, Tiền
-  ăn, Bốc xếp, Bốc xếp thuê, Chờ giờ, Ăn đêm, Hỗ trợ qua đêm. Dòng "Cộng theo
-  ngày" ở cuối bảng.
-- Dưới bảng, mỗi khoản chỉ có 1 lần trong kỳ ghi 1 dòng: Phụ cấp điện thoại,
-  Thâm niên, Khoán chi phí bảo quản xe, Tiền gửi xe, Thưởng giới thiệu lái
-  xe, Truy thu/Truy lĩnh, Vé gửi xe, Dầu chạy tiết kiệm; các khoản chưa xếp
-  cột nào ghi thành dòng "Phụ cấp khác: …".
-- Dòng **TỔNG LƯƠNG** cuối cùng = đúng "Tổng thu nhập" của lái xe đó ở Bảng
-  lương (chưa trừ Khấu trừ). Kỳ đã chốt lấy đúng số đã chốt.
+- Mỗi chuyến ở Lịch lái xe 1 dòng: Ngày, BKS, Lái xe, Trạng thái (loại
+  chuyến), Dự án (mã khách hàng), Tuyến (= **Tên tuyến** ở Lương theo
+  tuyến; riêng NTF luôn ghi "Kho Nutifood Hưng Yên"), Chi tiết (tuyến
+  đường; khách theo km ghi điểm đến; ngày Trực/Nghỉ ghi "Trực"/"Nghỉ"), Km.
+- 9 cột tiền tính theo chuyến/ngày: Lương cơ bản/Lương trực, Lương chuyến,
+  Lương điểm, Tiền ăn, Bốc xếp, Bốc xếp thuê, Chờ giờ, Ăn đêm, Hỗ trợ qua
+  đêm.
+- 8 cột khoản chỉ có 1 lần trong kỳ, ghi ở **dòng đầu tiên** như file mẫu:
+  Phụ cấp điện thoại, Thâm niên, Khoán chi phí bảo quản xe, Tiền gửi xe,
+  Thưởng giới thiệu lái xe, Truy thu/Truy lĩnh, Vé gửi xe, Dầu chạy tiết
+  kiệm. Khoản chưa xếp cột nào ghi vào cột "Phụ cấp khác" (chỉ hiện khi
+  có; rê chuột vào ô để xem từng khoản).
+- Dòng cuối **TỔNG CỘNG** cộng từng cột; ô **TỔNG LƯƠNG** = đúng "Tổng thu
+  nhập" của lái xe đó ở Bảng lương (chưa trừ Khấu trừ). Kỳ đã chốt lấy đúng
+  số đã chốt.
 
 **Cấu hình › Mẫu bảng công**: kéo thả từng khoản (Lương chuyến, Lương cứng
 theo ngày, Lương trực, Phụ cấp rớt điểm, Phụ cấp thâm niên, Thưởng/phạt
@@ -111,7 +113,7 @@ ghi. Nhiều khoản cùng 1 cột thì cộng lại (VD "Phụ cấp ăn" + "Ph
 cùng vào cột Tiền ăn). Khoản chưa từng kéo tự gợi ý cột theo tên (có chữ
 "ăn" → Tiền ăn, "bốc xếp thuê" → Bốc xếp thuê, "điện thoại" → Phụ cấp điện
 thoại…). Khoản cả kỳ (VD phụ cấp cố định theo kỳ) mà xếp vào cột theo ngày
-thì ghi ở chuyến đầu tiên của dự án đó.
+thì ghi ở dòng đầu tiên.
 
 File Excel xuất bằng thư viện ExcelJS (tải từ cdnjs khi bấm xuất lần đầu)
 để giữ được font Times New Roman, viền ô, chữ đậm, dòng TỔNG LƯƠNG nền vàng

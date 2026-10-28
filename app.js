@@ -3248,17 +3248,17 @@ function exportPayrollXlsx(){
    -------------------------------------------------------------------------
    Bố cục mỗi sheet (theo file mẫu "file mẫu xuất lương lái xe", đã bỏ cột
    "Ngày xong" theo yêu cầu người dùng ngày 2026-10-28):
-     - Bảng theo ngày: mỗi chuyến (Lịch lái xe) 1 dòng, xếp theo ngày — các
-       cột thông tin (Ngày, BKS, Lái xe, Trạng thái, Dự án, Tuyến, Chi tiết,
-       Km) + 9 cột tiền tính theo chuyến/ngày (BC_DAILY_SLOTS).
-     - Dòng "Cộng theo ngày" cộng từng cột tiền.
-     - Dưới bảng: mỗi khoản chỉ có 1 lần/kỳ ghi 1 dòng riêng
-       (BC_MONTHLY_SLOTS — Phụ cấp điện thoại → Dầu chạy tiết kiệm), rồi các
-       khoản chưa xếp cột nào ("Phụ cấp khác"), cuối cùng dòng TỔNG LƯƠNG.
+     - Mỗi chuyến (Lịch lái xe) 1 dòng, xếp theo ngày — các cột thông tin
+       (Ngày, BKS, Lái xe, Trạng thái, Dự án, Tuyến, Chi tiết, Km) + 9 cột
+       tiền tính theo chuyến/ngày (BC_DAILY_SLOTS) + 8 cột khoản cả kỳ
+       (BC_MONTHLY_SLOTS — Phụ cấp điện thoại → Dầu chạy tiết kiệm, ghi ở
+       DÒNG ĐẦU TIÊN) + cột "Phụ cấp khác" (chỉ khi còn khoản chưa xếp) +
+       cột TỔNG LƯƠNG.
+     - Dòng cuối "TỔNG CỘNG": cộng từng cột, ô TỔNG LƯƠNG = tổng các cột.
    Khoản nào vào cột nào do người dùng tự KÉO THẢ ở Cấu hình › Mẫu bảng công
    (lưu chung mọi tài khoản ở bảng "export_settings"); nhiều khoản cùng 1 cột
    thì cộng lại. Khoản chưa từng được xếp tự gợi ý cột theo TÊN
-   (bcDefaultSlotForName); khoản xếp vào "Chưa xếp" vẫn được xuất ở dòng
+   (bcDefaultSlotForName); khoản xếp vào "Chưa xếp" vẫn được xuất ở cột
    "Phụ cấp khác" để TỔNG LƯƠNG luôn bằng đúng "Tổng thu nhập" ở Bảng lương
    (chưa trừ Khấu trừ — mẫu không có cột khấu trừ).
    Số tiền mỗi khoản luôn lấy ĐÚNG số Bảng lương đã tính (kể cả kỳ đã chốt —
@@ -3461,13 +3461,10 @@ function bcLineProject(line){
 // cách calcPhuCap đã đếm (Theo chuyến: mỗi chuyến hợp lệ; Theo ngày công /
 // tỷ lệ ngày công: mỗi ngày; km × tải trọng: từng chuyến). Khoản cả kỳ
 // (cố định theo kỳ, vượt công tối thiểu, theo tải trọng, nhập tay…) ghi
-// nguyên vào chuyến đầu tiên của dự án đó.
+// nguyên vào DÒNG ĐẦU TIÊN của sheet (như file mẫu).
 function bcLineEntries(line, key, trips){
   const project = bcLineProject(line);
-  const whole = ()=>{
-    const t = (project && trips.find(x=>x.project===project && !isOffTrip(x))) || trips.find(x=>!isOffTrip(x)) || trips[0] || null;
-    return [{ tripId: t ? t.id : null, amount: line.amount }];
-  };
+  const whole = ()=>[{ tripId: null, amount: line.amount }];
   if(key==='b:pointDrop'){
     return calcPointDropGroups(trips).map(({trip, dropped})=>{
       const veh = vehicleByPlate(trip.plate);
@@ -3549,6 +3546,9 @@ function bcTripInfo(t, driverName){
   };
 }
 // Dữ liệu 1 sheet bảng công của 1 lái xe theo cách xếp cột "mapping".
+// Mỗi chuyến 1 dòng; khoản cả kỳ (cột S→Z, khoản không chia theo ngày và
+// khoản chưa xếp cột) ghi ở DÒNG ĐẦU TIÊN — đúng như file mẫu (yêu cầu
+// người dùng ngày 2026-10-28).
 function bcSheetData(r, mapping){
   const trips = bcSortTrips(r.trips);
   const allocs = bcDriverAllocations(r, trips);
@@ -3556,27 +3556,37 @@ function bcSheetData(r, mapping){
   bcItems().forEach(it=>{ itemsByKey[it.key] = it; });
   const slotOfKey = key=>itemsByKey[key] ? bcSlotOf(itemsByKey[key], mapping) : '';
   const nameOfKey = key=>itemsByKey[key] ? itemsByKey[key].name : (key.startsWith('x:') ? key.slice(2) : key);
-  const rows = trips.map(t=>({ trip:t, info: bcTripInfo(t, r.driver && r.driver.name), money:{} }));
+  const driverName = (r.driver && (r.driver.name || r.driver.code)) || '';
+  const rows = trips.map(t=>({ trip:t, info: bcTripInfo(t, driverName), money:{} }));
+  // Lái xe không có chuyến nào nhưng vẫn có tiền (VD chỉ có thưởng nhiên
+  // liệu) — vẫn cần 1 dòng để ghi.
+  if(!rows.length) rows.push({ trip:null, info:{ date:'', plate:'', driver: driverName, status:'', project:'', tuyen:'', detail:'', km:null, offOrStandby:false }, money:{} });
   const rowById = {};
-  rows.forEach(x=>{ rowById[x.trip.id] = x; });
-  const monthly = {};
-  BC_MONTHLY_SLOTS.forEach(s=>{ monthly[s.k] = 0; });
+  rows.forEach(x=>{ if(x.trip) rowById[x.trip.id] = x; });
+  const first = rows[0];
   const others = {};
   allocs.forEach(a=>{
     const slot = slotOfKey(a.itemKey);
     if(slot && bcIsDailySlot(slot)){
-      const row = (a.tripId && rowById[a.tripId]) || rows[0];
-      if(row){ row.money[slot] = (row.money[slot]||0) + a.amount; return; }
-    }else if(slot){ monthly[slot] += a.amount; return; }
-    others[a.itemKey] = (others[a.itemKey]||0) + a.amount;
+      const row = (a.tripId && rowById[a.tripId]) || first;
+      row.money[slot] = (row.money[slot]||0) + a.amount;
+    }else if(slot){
+      first.money[slot] = (first.money[slot]||0) + a.amount;
+    }else{
+      others[a.itemKey] = (others[a.itemKey]||0) + a.amount;
+    }
   });
   const otherLines = Object.keys(others).filter(k=>Math.round(others[k])!==0)
     .map(k=>({ key:k, name: nameOfKey(k), amount: others[k] }));
-  const dailyTotals = {};
-  BC_DAILY_SLOTS.forEach(s=>{ dailyTotals[s.k] = rows.reduce((acc,x)=>acc + (x.money[s.k]||0), 0); });
-  const dailySum = Object.values(dailyTotals).reduce((a,b)=>a+b, 0);
-  const total = dailySum + Object.values(monthly).reduce((a,b)=>a+b, 0) + otherLines.reduce((a,b)=>a+b.amount, 0);
-  return { rows, monthly, otherLines, dailyTotals, dailySum, total };
+  const otherSum = otherLines.reduce((acc,o)=>acc+o.amount, 0);
+  if(otherLines.length) first.money.other = otherSum;
+  // Cột "Phụ cấp khác" luôn có trong dữ liệu; exportBangCong bỏ cột này khỏi
+  // MỌI sheet nếu không lái xe nào trong file cần tới (giữ các sheet thẳng cột).
+  const slots = bcAllSlots().concat([{ k:'other', l:'Phụ cấp khác' }]);
+  const totals = {};
+  slots.forEach(s=>{ totals[s.k] = rows.reduce((acc,x)=>acc + (x.money[s.k]||0), 0); });
+  const total = Object.values(totals).reduce((acc,v)=>acc+v, 0);
+  return { rows, slots, otherLines, totals, total };
 }
 
 /* ---------------- Xuất file Excel ---------------- */
@@ -3609,21 +3619,35 @@ function bcExcelDate(iso){
   return m ? new Date(Date.UTC(+m[1], +m[2]-1, +m[3])) : (iso || '');
 }
 function bcColLetter(n){ let s = ''; while(n>0){ const m = (n-1) % 26; s = String.fromCharCode(65+m) + s; n = Math.floor((n-1)/26); } return s; }
+// Độ rộng cột tiền theo file mẫu: 9 cột theo ngày, 8 cột S→Z, "Phụ cấp
+// khác" (chỉ có khi còn khoản chưa xếp), TỔNG LƯƠNG.
+const BC_MONEY_WIDTHS = { phone:14.2, seniority:16.4, carCare:15.7, parking:15.6, referral:17, backpay:14.1, parkingTicket:14.9, fuel:16, other:16 };
 function bcWriteSheet(ws, d){
   const font = { name:'Times New Roman', size:11 };
   const thin = { style:'thin' };
   const border = { top:thin, left:thin, bottom:thin, right:thin };
-  const headers = BC_INFO_HEADERS.concat(BC_DAILY_SLOTS.map(s=>s.l));
-  const firstMoney = BC_INFO_HEADERS.length + 1;          // cột I
-  const lastMoney = headers.length;                        // cột Q
+  const nInfo = BC_INFO_HEADERS.length;
+  const firstMoney = nInfo + 1;                       // cột I
+  const lastMoney = nInfo + d.slots.length;           // cột cuối trước TỔNG LƯƠNG
+  const totalCol = lastMoney + 1;
   const L = bcColLetter;
-  ws.columns = headers.map((h,i)=>({ width: BC_COL_WIDTHS[i] || 13 }));
+  const headers = BC_INFO_HEADERS.concat(d.slots.map(s=>s.l), ['TỔNG LƯƠNG']);
+  ws.columns = headers.map((h,i)=>{
+    if(i < BC_COL_WIDTHS.length) return { width: BC_COL_WIDTHS[i] };
+    if(i === headers.length-1) return { width: 22.8 };
+    return { width: BC_MONEY_WIDTHS[d.slots[i-nInfo].k] || 14 };
+  });
   const style = (cell, extra)=>{ cell.font = Object.assign({}, font, extra && extra.font); cell.border = border; if(extra && extra.numFmt) cell.numFmt = extra.numFmt; if(extra && extra.alignment) cell.alignment = extra.alignment; if(extra && extra.fill) cell.fill = extra.fill; };
   const yellow = { type:'pattern', pattern:'solid', fgColor:{ argb:'FFFFFF00' } };
   const gray = { type:'pattern', pattern:'solid', fgColor:{ argb:'FFF2F2F2' } };
 
   const head = ws.getRow(1);
-  headers.forEach((h,i)=>{ const c = head.getCell(i+1); c.value = h; style(c, { font:{bold:true}, alignment:{ horizontal:'center', vertical:'middle', wrapText:true } }); });
+  headers.forEach((h,i)=>{
+    const c = head.getCell(i+1); c.value = h;
+    const isTotal = i===headers.length-1;
+    style(c, { font:{ bold:true, size: isTotal ? 14 : 11 }, fill: isTotal ? yellow : undefined,
+      alignment:{ horizontal:'center', vertical:'middle', wrapText:true } });
+  });
   head.height = 48;
 
   let r = 2;
@@ -3639,49 +3663,35 @@ function bcWriteSheet(ws, d){
         fill: info.offOrStandby ? gray : undefined,
       });
     });
-    BC_DAILY_SLOTS.forEach((s,i)=>{
+    d.slots.forEach((s,i)=>{
       const c = row.getCell(firstMoney + i);
       const v = x.money[s.k];
       c.value = v ? v : null;
       style(c, { numFmt: BC_MONEY_FMT, fill: info.offOrStandby ? gray : undefined });
+      if(s.k==='other' && v && d.otherLines.length){
+        c.note = 'Phụ cấp chưa xếp cột (Cấu hình › Mẫu bảng công):\n'
+          + d.otherLines.map(o=>`- ${o.name}: ${fmtMoney(o.amount)}`).join('\n');
+      }
     });
+    style(row.getCell(totalCol), { numFmt: BC_MONEY_FMT, fill: info.offOrStandby ? gray : undefined });
     r++;
   });
   const lastDataRow = r - 1;
 
-  // Dòng cộng từng cột tiền theo ngày
+  // Dòng cuối: cộng từng cột tiền + TỔNG LƯƠNG
   const totRow = ws.getRow(r);
-  ws.mergeCells(r, 1, r, BC_INFO_HEADERS.length);
-  totRow.getCell(1).value = 'Cộng theo ngày';
-  for(let i=1; i<=BC_INFO_HEADERS.length; i++) style(totRow.getCell(i), { font:{bold:true}, alignment:{ horizontal:'center' } });
-  BC_DAILY_SLOTS.forEach((s,i)=>{
+  ws.mergeCells(r, 1, r, nInfo);
+  totRow.getCell(1).value = 'TỔNG CỘNG';
+  for(let i=1; i<=nInfo; i++) style(totRow.getCell(i), { font:{ bold:true, size:12 }, alignment:{ horizontal:'center', vertical:'middle' } });
+  d.slots.forEach((s,i)=>{
     const col = firstMoney + i, c = totRow.getCell(col);
-    c.value = lastDataRow>=2 ? { formula:`SUM(${L(col)}2:${L(col)}${lastDataRow})`, result: d.dailyTotals[s.k] } : 0;
-    style(c, { font:{bold:true}, numFmt: BC_MONEY_FMT });
+    c.value = { formula:`SUM(${L(col)}2:${L(col)}${lastDataRow})`, result: d.totals[s.k] };
+    style(c, { font:{ bold:true }, numFmt: BC_MONEY_FMT });
   });
-  const totRowIdx = r;
-  r += 2;
-
-  // Khối dưới bảng: mỗi khoản 1 dòng, rồi TỔNG LƯƠNG
-  const labelEnd = firstMoney - 1;
-  const summaryLine = (label, value, opts)=>{
-    const row = ws.getRow(r);
-    ws.mergeCells(r, 1, r, labelEnd);
-    row.getCell(1).value = label;
-    for(let i=1; i<=labelEnd; i++) style(row.getCell(i), { font: opts && opts.font, fill: opts && opts.fill, alignment:{ vertical:'middle' } });
-    const c = row.getCell(firstMoney);
-    c.value = value;
-    style(c, { font: opts && opts.font, fill: opts && opts.fill, numFmt: BC_MONEY_FMT });
-    if(opts && opts.height) row.height = opts.height;
-    return r++;
-  };
-  const firstSummary = summaryLine('Cộng các khoản theo ngày',
-    { formula:`SUM(${L(firstMoney)}${totRowIdx}:${L(lastMoney)}${totRowIdx})`, result: d.dailySum }, { font:{bold:true} });
-  BC_MONTHLY_SLOTS.forEach(s=>summaryLine('- ' + s.l, d.monthly[s.k] ? d.monthly[s.k] : 0));
-  d.otherLines.forEach(o=>summaryLine('- Phụ cấp khác: ' + o.name, o.amount));
-  const lastSummary = r - 1;
-  summaryLine('TỔNG LƯƠNG', { formula:`SUM(${L(firstMoney)}${firstSummary}:${L(firstMoney)}${lastSummary})`, result: d.total },
-    { font:{ bold:true, size:14 }, fill: yellow, height: 24 });
+  const tc = totRow.getCell(totalCol);
+  tc.value = { formula:`SUM(${L(firstMoney)}${r}:${L(lastMoney)}${r})`, result: d.total };
+  style(tc, { font:{ bold:true, size:14 }, fill: yellow, numFmt: BC_MONEY_FMT, alignment:{ vertical:'middle' } });
+  totRow.height = 24;
 
   ws.views = [{ state:'frozen', ySplit:1 }];
   ws.pageSetup = { orientation:'landscape', paperSize:9, fitToPage:true, fitToWidth:1, fitToHeight:0 };
@@ -3704,9 +3714,13 @@ async function exportBangCong(){
     // Excel tự tính lại mọi công thức (dòng cộng, TỔNG LƯƠNG) khi mở file.
     wb.calcProperties.fullCalcOnLoad = true;
     const used = new Set();
-    rows.forEach(r=>{
+    const datas = rows.map(r=>bcSheetData(r, mapping));
+    const needOther = datas.some(d=>d.otherLines.length);
+    rows.forEach((r,i)=>{
+      const d = datas[i];
+      if(!needOther) d.slots = d.slots.filter(s=>s.k!=='other');
       const ws = wb.addWorksheet(bcSheetName(r.driver && r.driver.name, used));
-      bcWriteSheet(ws, bcSheetData(r, mapping));
+      bcWriteSheet(ws, d);
     });
     const buf = await wb.xlsx.writeBuffer();
     const single = rows.length===1 ? '_' + String(rows[0].driver.name||rows[0].driver.code||'').replace(/[\\\/:*?"<>|]/g, '').trim() : '';
@@ -3759,16 +3773,16 @@ function renderBangCongConfig(){
     ${note}
     <div class="bc-board">
       <section class="panel bc-group">
-        <h3>Chưa xếp <small>khi xuất tự ghi thành dòng “Phụ cấp khác” để Tổng lương luôn khớp Bảng lương — loại phụ cấp mới tạo chưa khớp tên cột nào sẽ hiện ở đây</small></h3>
+        <h3>Chưa xếp <small>khi xuất tự ghi vào cột “Phụ cấp khác” (dòng đầu tiên) để Tổng lương luôn khớp Bảng lương — loại phụ cấp mới tạo chưa khớp tên cột nào sẽ hiện ở đây</small></h3>
         ${slotBox({ k:'', l:'Chưa xếp' })}
       </section>
       <section class="panel bc-group">
-        <h3>Cột theo ngày <small>mỗi chuyến 1 dòng — khoản cả kỳ ghi ở chuyến đầu tiên của dự án</small></h3>
+        <h3>Cột theo ngày <small>mỗi chuyến 1 dòng — khoản cả kỳ kéo vào đây thì ghi ở dòng đầu tiên</small></h3>
         <div class="bc-grid">${BC_DAILY_SLOTS.map((s,i)=>slotBox(s, bcColLetter(BC_INFO_HEADERS.length + 1 + i))).join('')}</div>
       </section>
       <section class="panel bc-group">
-        <h3>Ghi 1 dòng dưới bảng <small>khoản chỉ có 1 lần trong kỳ, không chia theo ngày</small></h3>
-        <div class="bc-grid">${BC_MONTHLY_SLOTS.map(s=>slotBox(s)).join('')}</div>
+        <h3>Cột cả kỳ <small>khoản chỉ có 1 lần trong kỳ, không chia theo ngày — ghi ở dòng đầu tiên</small></h3>
+        <div class="bc-grid">${BC_MONTHLY_SLOTS.map((s,i)=>slotBox(s, bcColLetter(BC_INFO_HEADERS.length + BC_DAILY_SLOTS.length + 1 + i))).join('')}</div>
       </section>
     </div>`;
 }
@@ -7345,7 +7359,7 @@ function renderGuide(){
         <li><b>Lái xe</b>: chọn xe phụ trách (nhiều lái xe có thể chọn chung 1 xe theo ca), bật Lương cứng nếu khách trả thẳng cho lái xe, nhập Phụ cấp thâm niên nếu có (nhận trọn mỗi kỳ).</li>
         <li><b>Lương theo tuyến</b>: chọn khách hàng rồi gõ từng dòng — Tên tuyến (tên gọi nội bộ, không bắt buộc), Tuyến đường dạng "Điểm đi → Điểm đến" (đây là khoá tra giá), đơn giá, đơn giá tăng cường (trống = như giá thường), rồi bấm Lưu bảng giá. Đổi Tuyến đường đang có chuyến dùng thì các chuyến đó đổi theo. Khách Theo km cũng đặt được vài tuyến giá cố định ở đây.</li>
         <li><b>Phụ cấp</b>: tạo loại phụ cấp, chọn đơn vị tính, nhập đơn giá cho từng khách hàng áp dụng. Không cần gán cho từng lái xe.</li>
-        <li><b>Mẫu bảng công</b>: kéo từng khoản (lương chuyến, lương trực, rớt điểm, từng loại phụ cấp, dầu tiết kiệm…) vào đúng cột của file Bảng công lái xe. Nhiều khoản cùng 1 cột thì cộng lại; khoản chưa xếp tự ghi thành dòng "Phụ cấp khác". Cột Tuyến lấy theo Tên tuyến ở Lương theo tuyến (riêng NTF luôn ghi "Kho Nutifood Hưng Yên"). Cách xếp lưu chung cho mọi tài khoản.</li>
+        <li><b>Mẫu bảng công</b>: kéo từng khoản (lương chuyến, lương trực, rớt điểm, từng loại phụ cấp, dầu tiết kiệm…) vào đúng cột của file Bảng công lái xe. Nhiều khoản cùng 1 cột thì cộng lại; khoản chỉ có 1 lần trong kỳ ghi ở dòng đầu tiên; khoản chưa xếp tự ghi vào cột "Phụ cấp khác". Cột Tuyến lấy theo Tên tuyến ở Lương theo tuyến (riêng NTF luôn ghi "Kho Nutifood Hưng Yên"). Cách xếp lưu chung cho mọi tài khoản.</li>
         <li>Có sẵn danh sách trong Excel: <b>Tải mẫu Excel</b> → điền → <b>Nhập từ Excel</b>. Mã lái xe/biển số đã có thì cập nhật, mã mới thì thêm.</li>
       </ul>
     </details>
