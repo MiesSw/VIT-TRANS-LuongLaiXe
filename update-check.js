@@ -3,11 +3,14 @@
    cập nhật ngay. Hoạt động khi app chạy qua server.py (Mo_ung_dung.bat, địa
    chỉ http://127.0.0.1:...) HOẶC trong bản desktop (địa chỉ vittrans://app/ —
    main.js trả lời /api/update-check và /api/update-apply y như server.py).
-   Mở trực tiếp index.html (địa chỉ file://) thì tự bỏ qua, không hiện gì cả.
+   Mở trực tiếp index.html (địa chỉ file://) hoặc trang web GitHub Pages
+   (miessw.github.io — luôn là bản mới nhất, không có /api) thì tự bỏ qua.
    ============================================================================= */
 (function(){
   'use strict';
-  if(!/^(https?|vittrans):$/.test(location.protocol)) return;
+  const local = location.protocol === 'vittrans:' ||
+    (/^https?:$/.test(location.protocol) && /^(127\.0\.0\.1|localhost)$/.test(location.hostname));
+  if(!local) return;
 
   function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 

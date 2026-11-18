@@ -1,7 +1,7 @@
 {
-  "version": "2026.11.18-1344",
-  "message": "Menu ngang 6 tab, Tong quan dang bao cao theo quyen, tu cap nhat ban desktop",
-  "publishedAt": "2026-11-18T06:44:56.042Z",
+  "version": "2026.11.18-1426",
+  "message": "Ban web khong goi /api/update-check",
+  "publishedAt": "2026-11-18T07:26:25.139Z",
   "files": [
     {
       "path": "app.js",
@@ -21,7 +21,7 @@
     },
     {
       "path": "update-check.js",
-      "sha256": "8806eb8e74a39f7b1f526a6fa05c39b9b35290af314d49e95ae18fbc439a1638"
+      "sha256": "56cf6fc7c5560c40057d597e00fe2d668009e64cef6d235d4f4d383fd60894f0"
     },
     {
       "path": "van-don/index.html",
