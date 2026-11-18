@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Lương Lái Xe VIT TRANS</title>
+<title>Hệ thống tổng hợp VIT TRANS</title>
 <!--
   Hệ thống lương lái xe VIT TRANS — giao diện "clean SaaS dashboard" theo màu
   logo: logo trong sidebar, thanh trên cùng có tìm kiếm / kỳ lương / nút thao
@@ -25,7 +25,7 @@
   <form id="authForm" class="auth-card">
     <img class="auth-logo" src="logo.png" alt="VIT TRANS">
     <h1>Đăng nhập</h1>
-    <p class="auth-sub">Hệ thống lương lái xe VIT TRANS</p>
+    <p class="auth-sub">Hệ thống tổng hợp VIT TRANS</p>
     <p class="auth-error" id="authError" hidden></p>
     <div class="auth-field">
       <label for="authEmail">Email</label>
@@ -41,27 +41,35 @@
 </div>
 
 <div id="app">
-  <!-- ================= SIDEBAR ================= -->
-  <nav id="sidebar">
-    <div class="sb-head">
-      <a class="sb-brand" href="#" data-nav="payroll" title="Bảng lương">
-        <img class="sb-logo" src="logo.png" alt="VIT TRANS">
-        <span class="sb-brand-text"><b>Lương lái xe</b><small>VIT TRANS</small></span>
-      </a>
-      <button type="button" class="sb-collapse" id="sb-collapse" title="Thu gọn thanh bên" aria-label="Thu gọn thanh bên"></button>
+  <!-- ================= THANH MENU TRÊN CÙNG (16/11, thay sidebar trái cũ) =================
+       Logo/tên công ty (chỉ trang trí) + 6 tab, 5 tab xổ dropdown — dựng bởi
+       buildTopNavHtml()/renderNav() ở app.js (phần GIAO DIỆN cuối file), dữ
+       liệu lấy từ TOP_NAV. Bên phải vẫn các mục trạng thái/chuông/người dùng
+       cũ, chỉ chuyển từ #topbar lên đây cho giống bố cục tham khảo. -->
+  <header id="appbar">
+    <a class="ab-brand" href="#" data-nav="home" title="Trang chủ">
+      <img class="ab-logo" src="logo.png" alt="VIT TRANS">
+      <span class="ab-brand-text"><b>VIT TRANS</b></span>
+    </a>
+    <nav id="navroot" class="topnav"></nav>
+    <div class="tb-right">
+      <span class="topbar-status" id="topbar-status"><span class="storagedot" id="storage-dot"></span><span id="storage-mode">Đang kết nối dữ liệu…</span></span>
+      <div class="tb-bell-wrap" id="tb-bell-wrap">
+        <button type="button" class="tb-icon-btn tb-bell" id="tb-bell" title="Cảnh báo dữ liệu kỳ này" aria-label="Cảnh báo dữ liệu" aria-haspopup="true" aria-expanded="false"><span class="tb-bell-dot" id="tb-bell-dot" hidden></span></button>
+        <div class="tb-bell-menu" id="tb-bell-menu" hidden></div>
+      </div>
+      <span class="tb-sep" aria-hidden="true"></span>
+      <div class="tb-user">
+        <span class="tb-avatar" id="tb-avatar">VT</span>
+        <span class="tb-user-text"><b id="tb-name">VIT TRANS</b><small id="topbar-user" hidden></small><small id="tb-sub">Hệ thống tổng hợp</small></span>
+        <button type="button" class="tb-icon-btn" id="btn-logout" title="Đăng xuất" aria-label="Đăng xuất" hidden></button>
+      </div>
     </div>
-    <div class="sb-label">Menu</div>
-    <div id="navroot"></div>
-  </nav>
-  <!-- Nút cũ của app.js — giữ lại cho đúng id, giao diện mới dùng #sb-collapse -->
-  <button id="sidebar-toggle" hidden aria-hidden="true">‹</button>
-  <div class="sb-backdrop" id="sb-backdrop"></div>
+  </header>
 
   <!-- ================= CỘT PHẢI ================= -->
   <div class="ui2-right">
     <header id="topbar">
-      <button type="button" class="tb-icon-btn tb-menu" id="tb-menu" aria-label="Mở menu"></button>
-
       <!-- Thứ tự trên thanh: Kỳ lương → Tìm kiếm → ô lọc (Lái xe, Khách hàng…) → nút tài liệu.
            Kỳ lương giữ nguyên id các phần tử cho app.js -->
       <div class="periodbox">
@@ -94,20 +102,6 @@
         <div class="tb-doc-menu" id="tb-actions" hidden></div>
       </div>
       <div class="tb-extra" id="tb-extra"></div>
-
-      <div class="tb-right">
-        <span class="topbar-status" id="topbar-status"><span class="storagedot" id="storage-dot"></span><span id="storage-mode">Đang kết nối dữ liệu…</span></span>
-        <div class="tb-bell-wrap" id="tb-bell-wrap">
-          <button type="button" class="tb-icon-btn tb-bell" id="tb-bell" title="Cảnh báo dữ liệu kỳ này" aria-label="Cảnh báo dữ liệu" aria-haspopup="true" aria-expanded="false"><span class="tb-bell-dot" id="tb-bell-dot" hidden></span></button>
-          <div class="tb-bell-menu" id="tb-bell-menu" hidden></div>
-        </div>
-        <span class="tb-sep" aria-hidden="true"></span>
-        <div class="tb-user">
-          <span class="tb-avatar" id="tb-avatar">VT</span>
-          <span class="tb-user-text"><b id="tb-name">VIT TRANS</b><small id="topbar-user" hidden></small><small id="tb-sub">Hệ thống lương lái xe</small></span>
-          <button type="button" class="tb-icon-btn" id="btn-logout" title="Đăng xuất" aria-label="Đăng xuất" hidden></button>
-        </div>
-      </div>
     </header>
     <main id="main"></main>
   </div>

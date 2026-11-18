@@ -1,12 +1,13 @@
 /* =============================================================================
    update-check.js — banner báo "có bản cập nhật mới trên GitHub" + nút bấm
-   cập nhật ngay. CHỈ hoạt động khi app đang chạy qua server.py (mở bằng
-   Mo_ung_dung.bat, địa chỉ http://127.0.0.1:...). Mở trực tiếp index.html
-   (địa chỉ file://) thì file này tự bỏ qua, không hiện gì cả.
+   cập nhật ngay. Hoạt động khi app chạy qua server.py (Mo_ung_dung.bat, địa
+   chỉ http://127.0.0.1:...) HOẶC trong bản desktop (địa chỉ vittrans://app/ —
+   main.js trả lời /api/update-check và /api/update-apply y như server.py).
+   Mở trực tiếp index.html (địa chỉ file://) thì tự bỏ qua, không hiện gì cả.
    ============================================================================= */
 (function(){
   'use strict';
-  if(!/^https?:$/.test(location.protocol)) return;
+  if(!/^(https?|vittrans):$/.test(location.protocol)) return;
 
   function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 

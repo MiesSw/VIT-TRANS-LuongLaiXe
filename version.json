@@ -1,0 +1,43 @@
+{
+  "version": "2026.11.18-1344",
+  "message": "Menu ngang 6 tab, Tong quan dang bao cao theo quyen, tu cap nhat ban desktop",
+  "publishedAt": "2026-11-18T06:44:56.042Z",
+  "files": [
+    {
+      "path": "app.js",
+      "sha256": "4c13ac669932eb740cb9b7e19861c295a2118bd15fe52f164cfb8de2c29f7cc2"
+    },
+    {
+      "path": "index.html",
+      "sha256": "5f02caae8000804d451bb545ed770e2194bee6c683566b8b487b13382f387863"
+    },
+    {
+      "path": "logo.png",
+      "sha256": "3391e301274f8d2a5f90c669e7847eaff0fe66bf9c8d28eb5023e55a43395fe9"
+    },
+    {
+      "path": "styles.css",
+      "sha256": "3a01b785469cd9bd8c355eafaf84a3caec810b39a40c9d61e13460d3bb49657e"
+    },
+    {
+      "path": "update-check.js",
+      "sha256": "8806eb8e74a39f7b1f526a6fa05c39b9b35290af314d49e95ae18fbc439a1638"
+    },
+    {
+      "path": "van-don/index.html",
+      "sha256": "44681f6c89e1265c7bac5eeb309cedc50c3f5cca8215301b486728c3567e2824"
+    },
+    {
+      "path": "van-don/script.js",
+      "sha256": "b4264cba4fca28fa7bde736c377f56cfd75921b2f1c0f06a21ab02fcd52c2eae"
+    },
+    {
+      "path": "van-don/styles.css",
+      "sha256": "97e01ca50610544c0411ff9e50ac3e5bfb53906b24c488a7fdf06dd4589c816c"
+    },
+    {
+      "path": "van-don/vittrans.png",
+      "sha256": "3391e301274f8d2a5f90c669e7847eaff0fe66bf9c8d28eb5023e55a43395fe9"
+    }
+  ]
+}
