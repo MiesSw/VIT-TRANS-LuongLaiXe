@@ -89,7 +89,7 @@ function serveFile(request){
        khi TẤT CẢ đều khớp mới ghi đè vào thư mục "web" (lỗi giữa chừng thì giữ
        nguyên bản cũ, không để lẫn file cũ/mới).
    ----------------------------------------------------------------------------- */
-const UPDATE_BASE = 'https://raw.githubusercontent.com/MiesSw/VIT-TRANS-LuongLaiXe/main/';
+const UPDATE_BASE = 'https://raw.githubusercontent.com/MiesSw/VIT-TRANS-STS/main/';
 const VERSION_FILE = 'version.json';
 
 function localVersion(){
