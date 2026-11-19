@@ -1,11 +1,11 @@
 {
-  "version": "2026.11.18-1426",
-  "message": "Ban web khong goi /api/update-check",
-  "publishedAt": "2026-11-18T07:26:25.139Z",
+  "version": "2026.11.19-0826",
+  "message": "Sua loi thong bao Failed to fetch khong tu bien mat khi co mang lai",
+  "publishedAt": "2026-11-19T01:26:11.846Z",
   "files": [
     {
       "path": "app.js",
-      "sha256": "4c13ac669932eb740cb9b7e19861c295a2118bd15fe52f164cfb8de2c29f7cc2"
+      "sha256": "24ecee625b374b5cd88231cd5c885ec7eabbc092f80af780df63f4cb183bc742"
     },
     {
       "path": "index.html",

@@ -2434,6 +2434,10 @@ async function initStorage(){
       // chuỗi d.id đã String() hoá — lệch kiểu làm find() không khớp, ví dụ
       // nút Xoá ở "Lương theo tuyến" bấm không có phản ứng gì.
       const next = snap.docs.map(d=>({ ...d.data(), id:d.id }));
+      // Đọc lại được (VD máy vừa có mạng lại sau "Failed to fetch") → xoá lỗi
+      // cũ của bảng này, nếu không dòng báo đỏ "Chưa đọc được dữ liệu…" cứ
+      // treo mãi dù dữ liệu đã về đủ (lỗi gặp 19/11).
+      if(storageErrors[key]){ delete storageErrors[key]; scheduleRender(); }
       // Chỉ vẽ lại trang khi dữ liệu THỰC SỰ đổi — poll chạy mỗi 6s cho TỪNG
       // bảng riêng (13 bảng lệch nhau) nên nếu vẽ lại vô điều kiện mỗi lần
       // poll (như bản cũ), trang bị vẽ lại dồn dập dù chẳng có gì mới, khiến
@@ -2723,7 +2727,13 @@ function mergedNoticeHtml(){
       : `<div class="hint merged-note">Trình duyệt này đang dùng <b>kho lương cũ</b>. <a href="index.html?gop=1">Sang kho chung</a></div>`;
   }
   const err = MERGED_DB && Auth.payrollCan('view') && (storageErrors.drivers || storageErrors.trips || storageErrors.customers);
-  if(err) html += `<div class="hint merged-note merged-err"><b>Chưa đọc được dữ liệu lương ở kho chung.</b> ${esc(err)}</div>`;
+  // "Failed to fetch" = trình duyệt không gửi được yêu cầu (mất mạng/Wi-Fi
+  // chập chờn), không phải lỗi dữ liệu — báo dễ hiểu; app tự thử lại mỗi 6s
+  // và dòng này tự mất khi đọc lại được.
+  const offline = err && /failed to fetch|networkerror|load failed/i.test(err);
+  if(err) html += offline
+    ? `<div class="hint merged-note merged-err"><b>Mất kết nối Internet — chưa đọc được dữ liệu lương.</b> Phần mềm đang tự thử lại; có mạng lại là dữ liệu tự hiện, không cần làm gì.</div>`
+    : `<div class="hint merged-note merged-err"><b>Chưa đọc được dữ liệu lương ở kho chung.</b> ${esc(err)}</div>`;
   return html;
 }
 // Kho chung: trang lương mà tài khoản không có quyền xem
